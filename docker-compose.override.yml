@@ -1,0 +1,74 @@
+# docker-compose.override.yml
+#
+# Fork-local customization for this Hermes deployment. Compose auto-merges
+# this file on top of docker-compose.yml on every `docker compose up`, with
+# no flags needed. Volume lists are additive; environment maps merge by key.
+#
+# Keep all fork customization here so upstream files stay untouched and
+# future `git pull` of upstream merges cleanly.
+#
+# Variables below are substituted from the .env file sitting next to this
+# compose file at runtime. Compose loads it automatically.
+
+services:
+  gateway:
+    extra_hosts:
+      # Make host.docker.internal resolvable on native Linux Docker Engine.
+      # Docker Desktop on Mac/Windows/WSL2 already maps this automatically;
+      # this entry is a no-op there.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Read-only bind of fork-authored skills, mounted outside the local
+      # ~/.hermes/skills tree. Hermes picks them up via skills.external_dirs
+      # in ~/.hermes/config.yaml — see FORK.md for the one-time config snippet.
+      # Read-only on purpose: user-authored skills are source of truth and
+      # the agent must not mutate them. Agent-created skills continue going
+      # to ~/.hermes/skills/ on the host.
+      - ./my-skills:/opt/data/external-skills:ro
+    environment:
+      # Messaging platforms
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_ALLOWED_USERS=${DISCORD_ALLOWED_USERS}
+      - DISCORD_HOME_CHANNEL=${DISCORD_HOME_CHANNEL:-}
+      - DISCORD_REQUIRE_MENTION=${DISCORD_REQUIRE_MENTION:-true}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
+
+      # Blockchain / on-chain data
+      - BLOCKSCOUT_API_KEY=${BLOCKSCOUT_API_KEY}
+      - ALCHEMY_API_KEY=${ALCHEMY_API_KEY}
+      - CRYPTOPANIC_API_KEY=${CRYPTOPANIC_API_KEY}
+
+      # Gmail OAuth client identity. The refresh token is NOT stored here;
+      # Hermes' Google Workspace skill writes it into google_token.json in
+      # the local credential store after the first OAuth authorization.
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+
+      # OSINT / threat-intel skill family
+      - HUNTER_API_KEY=${HUNTER_API_KEY}
+      - ABSTRACT_API_KEY=${ABSTRACT_API_KEY}
+      - EMAILREP_API_KEY=${EMAILREP_API_KEY}
+      - NUMVERIFY_API_KEY=${NUMVERIFY_API_KEY}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+      - URLSCAN_API_KEY=${URLSCAN_API_KEY}
+      - OTX_API_KEY=${OTX_API_KEY}
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
+      - CENSYS_API_KEY=${CENSYS_API_KEY}
+      - IPQS_API_KEY=${IPQS_API_KEY}
+      - DEHASHED_API_KEY=${DEHASHED_API_KEY}
+      - BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY=${BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY}
+
+      # Local scraper service reachable from inside the container via the
+      # Docker host gateway alias.
+      - ASCEND_SCRAPPER_URL=${ASCEND_SCRAPPER_URL}
+
+  dashboard:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Mirror the external-skills mount so the dashboard sees the same skill
+      # set as the gateway. Both services already share ~/.hermes (and thus
+      # config.yaml), so once skills.external_dirs is set there, the dashboard
+      # picks them up via the same code path as the gateway.
+      - ./my-skills:/opt/data/external-skills:ro
