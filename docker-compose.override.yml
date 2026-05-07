@@ -72,3 +72,17 @@ services:
       # config.yaml), so once skills.external_dirs is set there, the dashboard
       # picks them up via the same code path as the gateway.
       - ./my-skills:/opt/data/external-skills:ro
+    # Override upstream's localhost-only command so the dashboard is
+    # reachable from the LAN. Hermes refuses to bind a non-localhost host
+    # without --insecure (it stores API keys and has no built-in auth);
+    # passing --insecure here is an explicit acknowledgement of that risk.
+    # Default port is 9119. With network_mode: host (inherited from
+    # upstream), the bind happens directly on the host's interfaces, so no
+    # `ports:` mapping is needed.
+    #
+    # SECURITY: anyone on a network that can reach this host:9119 will
+    # have full control of the agent and any credentials it holds.
+    # Production-like deployments should use SSH tunneling
+    # (`ssh -L 9119:localhost:9119 user@host`) or a reverse proxy with
+    # authentication instead of binding 0.0.0.0.
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--insecure", "--no-open"]
