@@ -18,7 +18,7 @@ This note covers a clean install from zero to working. For day-to-day operations
 | `Dockerfile.fork` | Extends `hermes-agent:fork` with a `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the TUI dist when `--tui` triggers a rebuild on startup |
 | `.env` | Local-only secrets, gitignored, auto-loaded by Compose for variable substitution |
 | `.env.fork.example` | Committed template — copy to `.env` and fill |
-| `fork/config.yaml.example` | Sanitized starter for `hermes-data/config.yaml` (Discord IDs stripped, `external_dirs` pre-wired) |
+| `fork/config.yaml.example` | The single `skills.external_dirs` snippet to merge into `hermes-data/config.yaml` so `my-skills/` is discovered |
 | `hermes-data/` | Persistent Hermes state (config, sessions, OAuth tokens, credentials). Gitignored except `SOUL.md` |
 | `my-skills/` | User-authored skill folders, read-only mount into the container |
 
@@ -64,23 +64,17 @@ docker compose logs -f gateway
 
 See fork/NOTE-2-llm-providers.md. Come back here when a provider is configured and `hermes doctor` shows it as logged in.
 
-### Step 6 — seed config.yaml and enable user-authored skills
+### Step 6 — enable user-authored skills
 
-`fork/config.yaml.example` is a sanitized snapshot of a working config with `skills.external_dirs` already wired and Discord IDs stripped. On a fresh install:
-
-```powershell
-copy fork\config.yaml.example hermes-data\config.yaml
-```
-
-Then open `hermes-data/config.yaml` and fill in your Discord channel IDs (`free_response_channels`, `allowed_channels`) and any other deployment-specific values.
-
-If you already have a `hermes-data/config.yaml`, just ensure this block is present:
+Hermes generates `hermes-data/config.yaml` with defaults on first run. The only fork-specific change you need to merge in is the `external_dirs` entry under `skills:` — see `fork/config.yaml.example` for the exact snippet. Open `hermes-data/config.yaml` and replace the existing `skills:` block (or just its `external_dirs: []` line) with:
 
 ```yaml
 skills:
   external_dirs:
     - /opt/data/external-skills
 ```
+
+Without this, the folders in `my-skills/` are mounted into the container but not discovered.
 
 ### Step 7 — apply config and verify
 
