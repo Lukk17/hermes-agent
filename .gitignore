@@ -304,3 +304,18 @@ native/fts5_cjk/*.so
 
 # Disposable profile created by scripts/probe_active_session_exclusivity.py
 .probe-home/
+
+hermes-data/*
+!hermes-data/SOUL.md
+
+# Fork-specific (Lukk17 fork)
+# hermes-data is repo-local persistent state. Track only selected content
+# (config, cron jobs, project workspaces, fork plugin). Runtime state
+# (auth tokens, session DB, logs, kanban DB, model cache) stays gitignored.
+hermes-data/*
+!hermes-data/.gitignore
+!hermes-data/SOUL.md
+!hermes-data/config.yaml
+!hermes-data/cron/**
+!hermes-data/projects/**
+!hermes-data/plugins/**
