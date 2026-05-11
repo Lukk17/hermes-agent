@@ -1,0 +1,5 @@
+# Fixes EACCES on /opt/hermes/ui-tui when `dashboard --tui` triggers a rebuild.
+FROM hermes-agent:fork
+USER root
+RUN chown -R hermes:hermes /opt/hermes/ui-tui
+USER hermes
