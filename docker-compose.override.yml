@@ -1,5 +1,8 @@
 services:
   gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.fork
     image: hermes-agent:fork
     extra_hosts:
       - "host.docker.internal:host-gateway"

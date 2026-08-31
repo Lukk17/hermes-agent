@@ -1,5 +1,95 @@
-# Fixes EACCES on /opt/hermes/ui-tui when `dashboard --tui` triggers a rebuild.
+# Tools + Python version manager layered on top of the upstream hermes-agent:fork.
+#
+# This Dockerfile is the "tools" image. The base image (hermes-agent:fork) is
+# already built by the upstream Dockerfile and includes:
+#   - Debian 13.4 (trixie) base
+#   - Python 3.13.5 in /opt/hermes/.venv (used by the hermes runtime)
+#   - uv at /usr/local/bin/uv (used to manage the hermes venv)
+#   - Node 26 + npm + Playwright
+#   - s6-overlay supervision tree
+#
+# This layer adds the project-specific tooling that the fork's projects need
+# but the upstream image does not ship:
+#   - apt packages for OSINT (libxml2, libxslt, nmap, masscan, libpcap, tor, golang-go, etc.)
+#   - pyenv (Python version manager)
+#   - Python 3.11 (used by fork/projects/crypto-monitor)
+#   - Python 3.12 (used by fork/projects/osint)
+#   - TUI chown fix (the original reason this Dockerfile existed; see git log)
+#
+# The same image serves BOTH services in docker-compose.override.yml. The
+# gateway runs hermes + cron + project scripts. The dashboard runs the
+# web UI on port 9119. Both use the same image because hermes' gateway
+# and dashboard are two entry points of the same Python module, not two
+# separate runtimes.
+
 FROM hermes-agent:fork
+
 USER root
+
+# ---------- OSINT apt dependencies ----------
+# libxml2, libxslt, libpcap, libssl, libffi, libbz2, libsqlite3, zlib: required
+# to compile lxml, scapy, sqlmap, and other Python extensions from source.
+# build-essential + *-dev: compile any Python extension that ships source-only.
+# golang-go: needed by some Amass modules and by SpiderFoot plugins.
+# nmap, masscan, tor: actual OSINT scanning tools.
+# libreadline-dev, libncursesw5-dev, tk-dev, xz-utils, liblzma-dev: build deps for
+# Python 3.11/3.12 from source via pyenv.
+# We deliberately skip python3-pip and python3-venv from system packages. The
+# base image's Python 3.13 already has pip, and the project venvs we build
+# with `uv` are independent of the system pip. Mixing system pip with
+# pyenv-installed pythons leads to PATH confusion.
+RUN apt-get -o Acquire::Retries=3 update && \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        golang-go \
+        libbz2-dev \
+        libffi-dev \
+        liblzma-dev \
+        libncursesw5-dev \
+        libpcap-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libssl-dev \
+        libxml2-dev \
+        libxmlsec1-dev \
+        libxslt1-dev \
+        masscan \
+        nmap \
+        tk-dev \
+        tor \
+        xz-utils \
+        zlib1g-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+# ---------- pyenv (Python version manager) ----------
+# pyenv lets us install arbitrary Python versions side by side. The crypto-monitor
+# project uses 3.11, the osint project uses 3.12, the upstream hermes runtime
+# uses 3.13. Three Pythons in one image, no PATH conflicts because pyenv shims
+# only fire on the requested version.
+#
+# Use the official pyenv.run installer script (more reliable than git clone
+# when the network is flaky or rate-limited). PYENV_PYTHON_BUILD=1 makes
+# pyenv use uv's prebuilt-Python downloader instead of compiling from source,
+# so the 3.11 and 3.12 installs are 30-60 second downloads each rather than
+# 5-10 minute compiles. uv is already in the base image.
+ENV PYENV_ROOT=/opt/pyenv
+ENV PATH="/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/hermes/bin:/usr/local/bin:/usr/bin:/bin"
+ENV PYENV_PYTHON_BUILD=1
+RUN rm -rf /opt/pyenv && curl -fsSL https://pyenv.run | PYENV_ROOT=/opt/pyenv bash
+RUN pyenv --version
+RUN pyenv install 3.11 && \
+    pyenv install 3.12 && \
+    pyenv global 3.11 && \
+    pyenv versions && \
+    chmod -R 777 /opt/pyenv
+
+# ---------- TUI chown fix (the original reason this Dockerfile existed) ----------
+# The upstream image seals /opt/hermes read-only for the hermes user. The
+# dashboard's `--tui` flag triggers a rebuild of the React bundle that
+# needs to write into /opt/hermes/ui-tui. chown back to the runtime user.
 RUN chown -R hermes:hermes /opt/hermes/ui-tui
+
 USER hermes
