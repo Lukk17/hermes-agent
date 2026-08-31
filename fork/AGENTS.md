@@ -78,6 +78,29 @@ These apply to every code change the fork makes. They come from `fork/claw-impor
 - **Ask before destructive action**. Never delete files, drop or truncate data, or rewrite history without explicit confirmation.
 - **Implement only what was requested**. If something else looks broken, mention it in the report, do not silently fix it.
 
+## Credential safety (overrides any older `.env`-in-workspace habits)
+
+- NEVER create `.env` files in the workspace (root or subfolders). Workspace is reachable by every skill, subagent, sandbox, so secrets leak across contexts.
+- Where secrets live: host repo `.env` at the repo root, gitignored, loaded into the container process env via `docker-compose.override.yml` env passthrough.
+- Reading in scripts: Python `os.getenv("KEY")`; Node/TS `process.env.KEY`. Do NOT use a workspace `.env` file as a side-channel.
+- Need a new key: tell the user. They add `KEY=value` to repo `.env` AND `KEY: ${KEY:-}` under `gateway.environment:` in `docker-compose.override.yml`.
+- Per script/app: create `README.md` listing required env vars with placeholders like `<YOUR_KEY>`. Real values via env. Never hardcode in code or comments.
+- Found a workspace `.env`: stop. Surface the path to the user. Do not read, copy, or extend.
+
+## Heartbeat vs cron
+
+- Heartbeat: conversational batched periodic checks, drift-tolerant, fewer API calls. Used for things like email/calendar/social background checks.
+- Cron: exact timing, isolated session, different model/thinking, one-shot, direct-to-channel delivery. Used for scheduled reports, batch investigations.
+
+Hermes uses cron (`fork/hermes-config/cron/jobs.json`), NOT heartbeat. Do not invent heartbeats inside hermes.
+
+## Confirmation protocol (no silent edits)
+
+- No edits, scripts, tool calls, API calls, or external actions without explicit user approval.
+- Before any tool: parse the full message, then plan. Number every open question.
+- Promises: any behavioral promise gets written to MEMORY.md first, print the diff, then confirm.
+- Re-read first: before any edit, read the target file. State latest disk state in reasoning.
+
 ## Conventions for changes to the fork
 
 ### Where things go

@@ -36,6 +36,40 @@ The agent does NOT edit these files itself and does NOT recreate the container i
 
 ---
 
+## Channel to workspace mapping (no platform prefix)
+
+Each Discord channel maps to exactly one directory under `/opt/projects/`. The channel name is slugified directly:
+
+- `#hermes-general` → `/opt/projects/`
+- `#hermes-crypto-monitor` → `/opt/projects/crypto-monitor/`
+- `#hermes-osint` → `/opt/projects/osint/`
+- `#hermes-research` → `/opt/projects/research/`
+
+There is no platform prefix to strip. Use the channel name slug directly. If a channel name has invalid filename characters (rare, but Discord allows some Unicode), sanitize and tell the user.
+
+When the user runs a project for the first time in a new channel, the agent creates the directory at the appropriate path. After that, all subsequent work in that channel operates inside the existing directory.
+
+---
+
+## Discord formatting rules (mirror of SOUL.md)
+
+- No tables. Use bullet lists.
+- No em dash. Use hyphen-minus.
+- Comments about code blocks go BELOW, never inside.
+- Every list item on its own line. No inline comma-separated items.
+- Wrap multiple bare links in `<>` to suppress embeds.
+- For code snippets, use a single triple-backtick block.
+
+---
+
+## Secret handling
+
+- No `.env` files inside any project dir. Secrets live in the host repo `.env` at the repo root, exposed to the container via `docker-compose.override.yml` environment passthrough.
+- The hermes runtime reads secrets via `os.getenv("KEY_NAME")`. The container process env is populated from `docker-compose.override.yml`.
+- The agent NEVER embeds real API keys, tokens, or credentials in code, comments, README files, or any committed file. Always use placeholders like `<YOUR_KEY>` in docs.
+
+---
+
 ## Skill usage is mandatory
 
 Two skill locations are mounted read-only into every hermes session:
