@@ -171,7 +171,7 @@ Patterns you will hit most often during a rebase:
 Example: upstream `docker-compose.yml` exposes `DISCORD_GATEWAY_TOKEN`, your override still uses `DISCORD_BOT_TOKEN`.
 
 - Update your override to the new env var name
-- Update `hermes-data/config.yaml` if it referenced the old name
+- Update `fork/hermes-config/config.yaml` if it referenced the old name
 - Leave a one-line comment in the override explaining the rename
 
 ### Upstream split a service in two
