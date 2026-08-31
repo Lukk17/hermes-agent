@@ -3,3 +3,4 @@
 # Claude Code reads this file and pulls in all AGENTS.md content via @ imports below.
 
 @../AGENTS.md
+@../fork/AGENTS.md

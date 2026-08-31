@@ -2,6 +2,22 @@
 
 This file is read by the hermes agent when its working directory is `/opt/projects/research/`. It layers on top of `/opt/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
 
+## Skill usage in this project
+
+For every research turn, list every relevant skill and use ALL of them:
+
+- `agentic-engineering` for breaking down research questions into eval-first subtasks
+- `automation-audit-ops` for documenting what is currently live before proposing changes
+- `coding-standards` for any code or config snippet embedded in findings.md
+- `docker-patterns` for any deployment / compose snippet that appears in a proposition
+- `observability-and-logging` for any logging / monitoring proposal that comes out of research
+- `python-patterns` for any code in `prototype/`
+- `review-duplication` before recommending a new feature; check whether the answer already exists in another channel or project
+- `security-review` for any research that touches auth, secrets, network, or PII
+- `api-design` for any research that proposes a new endpoint shape
+
+Run `skills list` mentally before each turn and pull in every skill that fits.
+
 ## Purpose
 
 The research channel (`#hermes-research`, Discord id `1543950705776398378`) is for ad-hoc investigations the user wants to run on various topics. Each topic is a self-contained subdirectory with its own findings, propositions, prototypes, and supporting documentation.
@@ -22,7 +38,7 @@ research/
     ├── prototype/                      # optional, only if a runnable artifact exists
     │   ├── README.md
     │   ├── <files>
-    │   └── venv/                       # gitignored
+    │   └── .venv/                      # gitignored, with leading dot
     └── docs/                           # supporting documentation, links, raw notes
 ```
 
@@ -31,7 +47,7 @@ Conventions:
 - The topic subdirectory name is a slug, not a number. `compare-hermes-vs-openclaw-event-loops` not `topic-001`.
 - `findings.md` is the main deliverable. It is what the agent reports back to the user with. Keep it skimmable.
 - `proposition.md` is optional. Use it when the findings imply an action. Skip it for pure research questions.
-- `prototype/` is for runnable artifacts only. README explains how to run. venv is gitignored.
+- `prototype/` is for runnable artifacts only. README explains how to run. `.venv/` is gitignored.
 - `docs/` is for raw notes, external links, transcripts, anything you do not want to consolidate into `findings.md` but want to keep.
 - Do not put binary files (images, PDFs, archives) directly in `research/<topic>/`. Reference them from `docs/` with relative paths or external URLs.
 
@@ -63,7 +79,7 @@ Format per entry:
 
 This project follows the same conventions as every other project in `/opt/projects/`:
 
-- Python dependencies live in a per-project venv at `/opt/projects/research/venv/` (gitignored). Build it once per machine. Most research topics will not need a venv at all; only topics with runnable prototypes do.
+- Python dependencies live in a per-project venv at `/opt/projects/research/.venv/` (with leading dot, gitignored). Build it once per machine. Most research topics will not need a venv at all, only topics with runnable prototypes do.
 - Cron-scheduled research is not the default. If a recurring research task is needed (e.g. weekly market scan), add a `hermes-data/cron/jobs.json` entry pointing at a topic-specific script.
 - Skill mounting: `/opt/external-skills/` and `/opt/skills/` are both available. Use them when appropriate. The user's earlier decision was that all skills go in the shared skills mount, not per-project. Stay consistent with that.
 

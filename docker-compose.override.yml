@@ -8,6 +8,11 @@ services:
       - ./fork/projects:/opt/projects
       - ./.agents/skills:/opt/external-skills:ro
       - ./skills:/opt/skills:ro
+      # Fork-specific overrides for files we change often. hermes-data:/opt/data
+      # provides the runtime state; these overrides shadow the same paths.
+      - ./fork/hermes-config/SOUL.md:/opt/data/SOUL.md
+      - ./fork/hermes-config/config.yaml:/opt/data/config.yaml
+      - ./fork/hermes-config/cron/jobs.json:/opt/data/cron/jobs.json
     environment:
       # Messaging
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
@@ -57,4 +62,6 @@ services:
     volumes:
       - ./hermes-data:/opt/data
       - ./fork/projects:/opt/projects
+      # Dashboard reads SOUL.md for the persona banner only; skip skills + cron
+      - ./fork/hermes-config/SOUL.md:/opt/data/SOUL.md
     command: ["dashboard", "--host", "127.0.0.1", "--port", "9119", "--insecure", "--no-open", "--tui"]
