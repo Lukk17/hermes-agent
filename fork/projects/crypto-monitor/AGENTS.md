@@ -29,7 +29,7 @@ Source code (tracked):
 - `tools/verify_wallets.py` — one-off wallet verification helper.
 - `config/` — JSON config: API endpoints (`settings.json`), whale registry (`whale_registry.json`), exchange wallets (`exchange_wallets.json`), influencer Twitter handles (`influencers.json`), airdrop opportunities (`airdrop_opportunities.json`).
 - `requirements.txt` — Python deps for the project's venv (NOT a system install).
-- `AGENT.md` — the original OpenClaw daily-task instructions. Path references are OpenClaw-specific (`/home/node/.openclaw/workspace/crypto-monitor`). **Read for context only**. The authoritative instructions are in this AGENTS.md plus the channel_prompts in `hermes-data/config.yaml`.
+- `AGENT.md` — the original OpenClaw daily-task instructions. Path references are OpenClaw-specific (`/home/node/.openclaw/workspace/crypto-monitor`). **Read for context only**. The authoritative instructions are in this AGENTS.md plus the channel_prompts in `fork/hermes-config/config.yaml` (bind-mounted at `/opt/data/config.yaml` inside the container).
 - `USER_REQUIREMENTS.md` — chart dimensions, section ordering, emoji headers, braille blank rules. Follow for any report composition.
 - `SUMMARY_GUIDE.md` — indicator interpretations (Fear and Greed buckets, Cycle Score phases, RSI ranges, MA Cross signals, Pi Cycle, BTC Dominance thresholds). Use to interpret every number.
 - `README.md` — OpenClaw-era project overview, API key list, collector/analyzer inventory. Most of it is still relevant for hermes; the few OpenClaw-specific lines are noted inline.
@@ -38,7 +38,7 @@ Source code (tracked):
 
 Runtime state (gitignored via `fork/projects/.gitignore`):
 
-- `venv/` — Python virtualenv. Built once per machine via `uv venv venv --python python3.11` then then `./venv/bin/pip install -r requirements.txt`.
+- `.venv/` — Python virtualenv (with leading dot, gitignored). Built once per machine via `uv venv .venv --python python3.11` then then `./.venv/bin/pip install -r requirements.txt`.
 - `data/reports/` — generated reports and chart PNGs.
 - `data/_cache/` — shared API cache (TTL-based).
 - `data/news/news_latest.json` — news input to the daily pipeline (gitignored; reproduced from `data/news/news_<date>.json` snapshots).
@@ -78,16 +78,16 @@ Keyless (used directly by collectors):
 
 ## Schedule
 
-Cron entry `crypto-monitor-daily` in `hermes-data/cron/jobs.json` fires daily at 10:00 UTC, cron expression `0 10 * * *`, container timezone UTC. The job runs as the hermes container user, so it can call `./daily_report_pipeline.sh` directly.
+Cron entry `crypto-monitor-daily` in `fork/hermes-config/cron/jobs.json` (bind-mounted at `/opt/data/cron/jobs.json`) fires daily at 10:00 UTC, cron expression `0 10 * * *`, container timezone UTC. The job runs as the hermes container user, so it can call `./daily_report_pipeline.sh` directly.
 
 ## First-time setup
 
 ```bash
 cd /opt/projects/crypto-monitor
-uv venv venv --python python3.11
-./venv/bin/pip install -r requirements.txt
+uv venv .venv --python python3.11
+./.venv/bin/pip install -r requirements.txt
 # Smoke test
-./venv/bin/python scripts/report_generator.py
+./.venv/bin/python scripts/report_generator.py
 ```
 
 If collectors fail with import errors, add the missing packages to `requirements.txt` and re-install. Re-run `hermes cron run crypto-monitor-daily` (dry-run) to verify end-to-end.
@@ -108,4 +108,4 @@ The pipeline currently runs from the project root via `daily_report_pipeline.sh`
 
 - It is not a trading system. The agent does NOT execute trades, place orders, or move funds. Observation only.
 - It is not the OpenClaw project. The OpenClaw version of this same content lives at `\\wsl$\Ubuntu\home\lukk\.openclaw\workspace\crypto-monitor\`. Hermes reads from `/opt/projects/crypto-monitor/`, not the OpenClaw path.
-- It is not the gateway config. Channel behavior, API keys, and Discord settings live in `hermes-data/config.yaml` and `.env`.
+- It is not the gateway config. Channel behavior, API keys, and Discord settings live in `fork/hermes-config/config.yaml` and `.env`.

@@ -77,7 +77,7 @@ Two skill locations are mounted read-only into every hermes session:
 - `/opt/external-skills/` ← `./.agents/skills/` (curated subset of `Lukk17/agent-standards/.agents/skills/`, mirrored via the `git checkout agent-standards/master` loop described in `fork/NOTE-6-minipc-proxmox.md`)
 - `/opt/skills/` ← `./skills/` (any extra per-project skills you want to share)
 
-Skills appear in `hermes-data/config.yaml` under `skills.external_dirs`. The agent discovers skills from both at session start.
+Skills appear in `fork/hermes-config/config.yaml` (bind-mounted at `/opt/data/config.yaml` inside the container) under `skills.external_dirs`. The agent discovers skills from both at session start.
 
 ### Rules
 
@@ -146,7 +146,7 @@ The agent switches working directory at the start of each turn based on the acti
 
 ## Tool conventions
 
-- For scheduled work, every project gets a cron entry in `hermes-data/cron/jobs.json` (the v2026.8.27+ format is JSON, NOT the old YAML). Schedules must be cron expressions (e.g. `0 10 * * *` for 10:00 UTC daily). Cron runs as the hermes container user, which means scripts can use `/opt/projects/<name>/.venv/bin/python` directly.
+- For scheduled work, every project gets a cron entry in `fork/hermes-config/cron/jobs.json` (bind-mounted at `/opt/data/cron/jobs.json` inside the container) (the v2026.8.27+ format is JSON, NOT the old YAML). Schedules must be cron expressions (e.g. `0 10 * * *` for 10:00 UTC daily). Cron runs as the hermes container user, which means scripts can use `/opt/projects/<name>/.venv/bin/python` directly.
 - For Discord output, use the `discord.send` tool (provided by the gateway). Do NOT call Discord REST API directly from project scripts.
 - For OSINT and crypto lookups, use the env vars from `.env` (`HUNTER_API_KEY`, `ALCHEMY_API_KEY`, etc.). Never bake keys into project scripts.
 - For web scraping across projects, prefer the ascend scraper at `$ASCEND_SCRAPPER_URL`. Skip Playwright / Selenium unless the project explicitly says otherwise.
@@ -163,7 +163,7 @@ The Docker container runs as the user specified by `HERMES_UID`/`HERMES_GID` (de
 
 - It is not a replacement for per-project `AGENTS.md` files. Each project has its own and the project file wins for project-specific questions.
 - It is not the AGENTS.user.md private notes file. That lives at `/opt/projects/AGENTS.user.md` if the user creates it.
-- It is not hermes system prompt. Hermes' actual system prompt is built from `hermes-data/SOUL.md` plus `channel_prompts` plus this file when cwd matches `/opt/projects/`.
-- It is not a config file. Persistent settings live in `hermes-data/config.yaml`. Cron schedules live in `hermes-data/cron/jobs.json`. Persona / memory live in `hermes-data/SOUL.md` and `hermes-data/memories/`.
+- It is not hermes system prompt. Hermes' actual system prompt is built from `fork/hermes-config/SOUL.md` (bind-mounted at `/opt/data/SOUL.md` inside the container) plus `channel_prompts` plus this file when cwd matches `/opt/projects/`.
+- It is not a config file. Persistent settings live in `fork/hermes-config/config.yaml`. Cron schedules live in `fork/hermes-config/cron/jobs.json`. Persona lives in `fork/hermes-config/SOUL.md` and `hermes-data/memories/`.
 - It is not a place to track historical OpenClaw files. Historical context belongs in git history, not in the working tree. If a file is no longer relevant, delete it.
 - It is not the AGI manifesto. It is just the operating instructions that keep the four channels consistent.

@@ -80,13 +80,13 @@ Format per entry:
 This project follows the same conventions as every other project in `/opt/projects/`:
 
 - Python dependencies live in a per-project venv at `/opt/projects/research/.venv/` (with leading dot, gitignored). Build it once per machine. Most research topics will not need a venv at all, only topics with runnable prototypes do.
-- Cron-scheduled research is not the default. If a recurring research task is needed (e.g. weekly market scan), add a `hermes-data/cron/jobs.json` entry pointing at a topic-specific script.
+- Cron-scheduled research is not the default. If a recurring research task is needed (e.g. weekly market scan), add a `fork/hermes-config/cron/jobs.json` entry (bind-mounted at `/opt/data/cron/jobs.json` inside the container) pointing at a topic-specific script.
 - Skill mounting: `/opt/external-skills/` and `/opt/skills/` are both available. Use them when appropriate. The user's earlier decision was that all skills go in the shared skills mount, not per-project. Stay consistent with that.
 
 ## What this project is NOT
 
 - It is NOT a note-taking system. Topics that the user wants to think about without an output are SOUL.md / MEMORY.md territory, not research topics.
-- It is NOT a Kanban. Tasks go in the kanban board (`hermes-data/kanban.db`), not as research topics.
+- It is NOT a Kanban. Tasks go in the kanban board (`hermes-data/kanban.db`, runtime state only, gitignored), not as research topics.
 - It is NOT the OpenClaw workspace. OpenClaw's analog lives at `\\wsl$\Ubuntu\home\lukk\.openclaw\workspace\research\`. Hermes reads from `/opt/projects/research/`, not from there.
 
 ## Channel persona expectations

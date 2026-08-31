@@ -15,40 +15,24 @@ without an SSH tunnel.
 
 The intent of this fork is that the GitHub repo IS the deployable unit: a
 fresh `git clone` on the minipc gives you everything except secrets and
-runtime state. To make that work, the fork splits `hermes-data/` into two
-halves: tracked content (config, cron jobs, project workspaces, fork
-plugin, per-channel prompts) and gitignored runtime state (OAuth tokens,
-sessions database, logs, kanban DB, model cache).
+runtime state. To make that work, the fork keeps three directories:
 
-Tracked under `hermes-data/`:
+- `./fork/hermes-config/` (tracked): `SOUL.md`, `config.yaml`, `cron/jobs.json`. Bind-mounted at `/opt/data/...` inside the container via file-specific overrides.
+- `./fork/projects/` (tracked): project workspaces. Bind-mounted at `/opt/projects/`.
+- `./hermes-data/` (gitignored, runtime state only): `state.db`, `auth.json`, `logs/`, `sessions/`, `cache/`, `memories/`, `kanban.db`. Bind-mounted at `/opt/data/`.
 
-- `SOUL.md` (agent personality)
-- `config.yaml` (provider, model, Discord IDs, channel prompts, external_dirs)
-- `cron/jobs.yaml` (scheduled jobs)
-- `projects/<name>/` (per-project workspaces, e.g. `projects/crypto-monitor/`)
-- `plugins/hermes-fork-extras/` (fork-specific plugin)
+Plus tracked in repo root:
+- `.env` (gitignored): local secrets.
+- `.agents/skills/`: curated skills, bind-mounted at `/opt/external-skills/`.
+- `./skills/`: bundled hermes skills, bind-mounted at `/opt/skills/`.
+- `docker-compose.override.yml`, `Dockerfile.fork`: container wiring.
 
-Gitignored under `hermes-data/`:
+The fork is a real rebase target: `git fetch upstream && git rebase v<TAG>`
+on `master` does not conflict with any of the above because upstream does
+not ship `fork/`, `fork/hermes-config/`, `fork/projects/`, `.agents/skills/`,
+or `./skills/`. Upstream has its own `hermes-data/` and we leave it alone.
 
-- `auth.json`, `auth.lock` (OAuth tokens)
-- `state.db*` (sessions SQLite DB)
-- `sessions/` (conversation history)
-- `logs/` (agent log files)
-- `cache/`, `models_dev_cache.json` (provider model lists)
-- `discord_threads.json`, `gateway.lock`, `gateway.pid` (process state)
-- `kanban.db*` (debatable; keep tracked only if you want the board to survive
-  a fresh clone, otherwise gitignore)
-- `credentials/` (per-skill OAuth credential files like `google_token.json`)
-- `external-skills/` (this is the mount target for `.agents/skills/`,
-  never written to from inside the container)
-- `.hermes_history`, `.skills_prompt_snapshot.json`, `.npm`, `.local`,
-  `bin/` (runtime scratch)
-
-The `.gitignore` at the repo root already excludes `hermes-data/` except
-`SOUL.md`. The repo-root `.gitignore` plus the same patterns in
-`hermes-data/.gitignore` (a per-directory ignore) achieve the split above.
-See the "Tracking hermes-data selectively" section below for the exact
-rules.
+See `fork/NOTE-7-updating-from-upstream.md` for the rebase procedure.
 
 ### Network layout assumed
 
@@ -75,7 +59,7 @@ needs:
 
 | Path on minipc | Source | Notes |
 |---|---|---|
-| `/opt/hermes-fork/` (the project root) | `git clone` of this repo | tracked content, including `hermes-data/config.yaml`, `hermes-data/SOUL.md`, `hermes-data/projects/`, `hermes-data/cron/`, `hermes-data/plugins/`, `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml` |
+| `/opt/hermes-fork/` (the project root) | `git clone` of this repo | tracked content, including `fork/hermes-config/SOUL.md`, `fork/hermes-config/config.yaml`, `fork/hermes-config/cron/jobs.json`, `fork/projects/`, `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml` |
 | `/opt/hermes-fork/.env` | hand-written, from `.env.fork.example` | secrets, gitignored |
 
 That is it. No rsync, no source tree, no `.venv`, no `node_modules`.
@@ -182,22 +166,28 @@ After either operation, no container restart is needed. Hermes rescans
 docker compose exec gateway /opt/hermes/.venv/bin/hermes skills reload
 ```
 
-### Sync the fork plugin (`hermes-data/plugins/hermes-fork-extras/`)
+### Fork plugin (optional, future use)
 
-The fork plugin lives at `hermes-data/plugins/hermes-fork-extras/` and is
-picked up by Hermes' plugin manager as `~/.hermes/plugins/hermes-fork-extras/`
-inside the container. It is tracked in git (no sync needed beyond `git pull`).
+The upstream fork layout reserves `hermes-data/plugins/hermes-fork-extras/`
+for a fork-specific plugin, but the current fork does NOT use one. The
+per-project conventions under `fork/projects/` plus the channel_prompts
+in `fork/hermes-config/config.yaml` cover the same needs without a plugin.
 
-On first boot, Hermes auto-discovers any folder matching
-`<hermes_home>/plugins/<name>/plugin.yaml` + `<name>/__init__.py`. No
-explicit registration is needed.
+If you later decide to add a fork plugin (for example, a custom OSINT tool
+or a Discord admin helper), create it at `hermes-data/plugins/<name>/`
+with a `plugin.yaml` and `__init__.py`. The container bind-mounts
+`hermes-data/` at `/opt/data/`, so the plugin shows up at
+`/opt/data/plugins/<name>/` inside the container. Install any third-party
+deps via:
 
-If you ever need to install third-party Python deps for the plugin:
-
-```bash
+```powershell
 docker compose exec gateway /opt/hermes/.venv/bin/pip install <pkg>
-# the .venv lives on the bind-mounted volume, so this survives a recreate
 ```
+
+Remember that any file in `hermes-data/` is runtime state and not tracked
+in git. The plugin is created and configured on each minipc separately.
+For a tracked plugin, place it in `fork/hermes-config/plugins/<name>/` and
+add a file-specific bind mount for the directory.
 
 ### Bring it up
 
@@ -303,9 +293,10 @@ automation.
   `du -sh ./hermes-data/` periodically.
 - **Resource caps.** Hermes plus Playwright Chromium can spike to 2GB RAM
   during a `terminal` session. Give the VM 4GB minimum, 8GB comfortable.
-- **Backups.** Add `./hermes-fork/hermes-data/` to Proxmox's backup
-  schedule (PBS or vzdump). `config.yaml`, `auth.json`, `SOUL.md`,
-  `kanban.db`, and `projects/` are the irreplaceable bits.
+- **Backups.** Add `./hermes-fork/hermes-data/` AND `./hermes-fork/fork/hermes-config/` to Proxmox's
+  backup schedule (PBS or vzdump). `state.db` (sessions), `auth.json` (OAuth),
+  `kanban.db` (board state), and everything in `fork/hermes-config/` (config,
+  persona, cron) are the irreplaceable bits.
 - **Firewall.** If Proxmox enables a guest firewall by default, open port
   22 (for SSH) and 80 (for nginx) at the Proxmox firewall level. Port 9119
   stays loopback-only and never appears on the VM's interfaces.
@@ -325,39 +316,31 @@ Your `./hermes-data/` is bind-mounted, not copied into the image, so config
 and sessions survive. OAuth tokens refresh automatically on next session
 start.
 
-### Tracking hermes-data selectively
+### hermes-data is gitignored entirely
 
-The fork's root `.gitignore` excludes `hermes-data/` except `SOUL.md`. Add
-a `hermes-data/.gitignore` to allow only the tracked content. Drop this
-file at `hermes-data/.gitignore`:
+The current fork design treats `hermes-data/` as fully runtime. There is
+no per-directory whitelist. The root `.gitignore` excludes the whole
+directory. All tracked configuration lives in `./fork/hermes-config/`. The
+fork was redesigned this way to make rebase-on-upstream conflict-free.
 
-```
-# allow tracked content
-!/.gitignore
-!/SOUL.md
-!/config.yaml
-!/cron/
-!/projects/
-!/plugins/
+The `hermes-data/.gitignore` file that used to whitelist `SOUL.md` and
+`config.yaml` no longer exists. If you are upgrading from an older fork
+branch, delete it:
 
-# ignore everything else inside hermes-data/
-/*
+```powershell
+cmd /c "del hermes-data\.gitignore"
 ```
 
-The `/*` line ignores every direct child by default, then the `!` lines
-un-ignore the ones we want. This pattern matches Git's standard
-"gitignore with whitelist" idiom.
-
-If you want kanban state to survive across clones, also un-ignore
-`!/kanban.db` (and be aware it will conflict if two clones ever push to the
-same remote). Most users prefer to keep `kanban.db*` gitignored and treat it
-as runtime state.
+There is no need to replace it with anything. `hermes-data/` is now a pure
+runtime directory.
 
 ### Per-project subdirectories (crypto-monitor, osint)
 
 Hermes does not auto-create per-project directories under `hermes-data/`,
-but you can make each Discord channel's agent stick to its own subdir by
-encoding the path in `channel_prompts` (see `fork/NOTE-3-discord.md`):
+but the fork expects projects to live in `fork/projects/<name>/` (mounted
+at `/opt/projects/<name>/` inside the container). Configure each
+Discord channel's agent to stick to its own subdir via `channel_prompts`
+in `fork/hermes-config/config.yaml` (see `fork/NOTE-3-discord.md`):
 
 ```yaml
 discord:
@@ -377,6 +360,7 @@ those subdirs unless explicitly asked. For hard isolation you need separate
 Hermes profiles (`hermes -p crypto`, `hermes -p osint`) running as
 separate containers with separate Discord bot users.
 
-The `hermes-data/projects/<name>/` location is the canonical spot for
+The `fork/projects/<name>/` location is the canonical spot for
 project workspaces because it is tracked in git. Drop your OpenClaw
-project content there.
+project content there. Mounted at `/opt/projects/<name>/` inside the
+container.

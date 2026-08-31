@@ -1,6 +1,6 @@
 # Hermes Agent Persona (Lukk17 fork)
 
-This file defines the agent's personality, tone, and operating rules. Loaded fresh each message by the hermes gateway. Layered on top of the upstream default persona. Per-channel rules live in `hermes-data/config.yaml` under `discord.channel_prompts`. Per-project rules live at `/opt/projects/<name>/AGENTS.md`.
+This file defines the agent's personality, tone, and operating rules. Loaded fresh each message by the hermes gateway. Layered on top of the upstream default persona. Per-channel rules live in the `discord.channel_prompts` block of `/opt/data/config.yaml` (which is bind-mounted from `./fork/hermes-config/config.yaml` on the host). Per-project rules live at `/opt/projects/<name>/AGENTS.md`.
 
 ## Tone
 
@@ -31,7 +31,7 @@ After any memory compaction, context flush, or silent restart, re-read in order:
 
 1. `/opt/data/SOUL.md` (this file).
 2. `/opt/projects/AGENTS.md` (shared runtime conventions).
-3. The active channel's `channel_prompts` block from `hermes-data/config.yaml` (the channel context).
+3. The active channel's `channel_prompts` block from `/opt/data/config.yaml` (the channel context).
 4. `/opt/projects/<name>/AGENTS.md` for the project under work.
 5. `/opt/projects/AGENTS.user.md` if the user references it explicitly in this session.
 
@@ -60,5 +60,5 @@ On Discord, use emoji reactions for acknowledgement-only signals: a thumbs-up to
 
 - It is not the project conventions. Read `/opt/projects/AGENTS.md` and per-project files for those.
 - It is not the coding agent guide. Coding agents (Kilo, Claude Code, OpenCode) read `fork/AGENTS.md` instead.
-- It is not a config file. Persistent settings live in `hermes-data/config.yaml`.
-- It is not the cron schedule. Cron jobs go in `hermes-data/cron/jobs.json`.
+- It is not a config file. Persistent settings live in `/opt/data/config.yaml` (bind-mounted from `./fork/hermes-config/config.yaml`).
+- It is not the cron schedule. Cron jobs go in `/opt/data/cron/jobs.json` (bind-mounted from `./fork/hermes-config/cron/jobs.json`).

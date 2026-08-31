@@ -8,7 +8,7 @@ Hermes Agent has first-class Discord support. The bot lives at `gateway/platform
 | Server channels | Only responds to `@mention` by default. Set `DISCORD_REQUIRE_MENTION=false` to respond to every message. |
 | Free-response channels | List specific channels in `DISCORD_FREE_RESPONSE_CHANNELS` to skip the mention requirement. |
 | Threads | Replies in the same thread. Isolated session history from parent channel. |
-| Shared channels | By default each user gets their own session inside a shared channel. Set `group_sessions_per_user: false` in `./hermes-data/config.yaml` for one shared transcript. |
+| Shared channels | By default each user gets their own session inside a shared channel. Set `group_sessions_per_user: false` in `./fork/hermes-config/config.yaml` (bind-mounted at `/opt/data/config.yaml` inside the container) for one shared transcript. |
 
 ### Discord Developer Portal setup
 
@@ -72,7 +72,7 @@ Currently wired in `docker-compose.override.yml` under `gateway.environment:`:
 
 ### Optional toggles
 
-In `./hermes-data/config.yaml`:
+In `./fork/hermes-config/config.yaml` (bind-mounted at `/opt/data/config.yaml` inside the container):
 
 ```yaml
 group_sessions_per_user: true

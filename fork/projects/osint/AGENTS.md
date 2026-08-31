@@ -137,4 +137,4 @@ Run `grep -rn '.openclaw\|/home/node' .` from the project root to find every har
 
 - It is NOT automated reconnaissance. Every investigation starts with the user's explicit authorization.
 - It is NOT the OpenClaw project. The OpenClaw version lives at `\\wsl$\Ubuntu\home\lukk\.openclaw\workspace\osint\`. Hermes reads from `/opt/projects/osint/`, not the OpenClaw path.
-- It is NOT the gateway config. Channel behavior, API keys, and Discord settings live in `hermes-data/config.yaml` and `.env`.
+- It is NOT the gateway config. Channel behavior, API keys, and Discord settings live in `fork/hermes-config/config.yaml` and `.env`.

@@ -10,15 +10,15 @@ First-class support, provider ID `minimax-oauth`. No API key, no credit card.
 |---|---|
 | Provider ID | `minimax-oauth` |
 | Auth | Browser OAuth, PKCE device-code flow |
-| Models | `MiniMax-M2.7`, `MiniMax-M2.7-highspeed` |
+| Models | `MiniMax-M3` |
 | Endpoint, global | `https://api.minimax.io/anthropic` |
 | Endpoint, China | `https://api.minimaxi.com/anthropic` |
 | Env var needed | None (`MINIMAX_API_KEY` is for the API-key provider only) |
-| Token storage | `./hermes-data/auth.json` |
+| Token storage | `hermes-data/auth.json` (gitignored, runtime only) |
 
 ### MiniMax setup via the dashboard
 
-Open the dashboard, go to the providers/models section, click Add Provider, pick MiniMax (OAuth). The dashboard opens MiniMax's authorization page in a new browser tab. Sign in, approve, the dashboard finalizes the flow and stores tokens in `./hermes-data/auth.json` on the host. Then pick MiniMax-M2.7 as the active model.
+Open the dashboard, go to the providers/models section, click Add Provider, pick MiniMax (OAuth). The dashboard opens MiniMax's authorization page in a new browser tab. Sign in, approve, the dashboard finalizes the flow and stores tokens in `hermes-data/auth.json` (runtime, gitignored) on the host. Then pick the active model (e.g. `MiniMax-M3`).
 
 Tokens auto-refresh at every session start when within 60 seconds of expiry.
 
