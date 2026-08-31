@@ -2,25 +2,50 @@
 
 This file is read by the hermes agent when its working directory is `/opt/projects/osint/`. It layers on top of `/opt/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
 
+## Skill usage in this project
+
+This project does open-source intelligence gathering. The mandatory skill set:
+
+- `python-patterns` for any edit to `src/` Python code (cascade engine, tool integrations, services)
+- `coding-standards` for style/quality reviews
+- `docker-patterns` when adjusting the cron pipeline or env wiring (rare for this project since OSINT is manual-only)
+- `observability-and-logging` for adding metrics or structured logs to investigations
+- `review-duplication` before merging changes that span multiple services
+- `security-review` for any change that handles API keys, breach data, or PII
+- `finance-billing-ops` (or `finance-*`) for paid OSINT API cost accounting
+
+Run `skills list` mentally before each turn and pull in every skill that fits.
+
 ## What lives here
 
 Source code (tracked):
 
-- `README.md` — original OpenClaw project docs (setup, requirements, install steps, blocked services).
-- `ARCHITECTURE.md` — agent overview, cascade engine, naming conventions.
-- `TODO.md` — pending work for the project.
-- `src/main.py` — main entry point. CLI invocation.
+- `README.md` — original OpenClaw project docs (setup, requirements, install steps, blocked services). Path references are OpenClaw-specific and have to be read as historical context only.
+- `SETUP.md` — step-by-step OpenClaw install. Skip for hermes; this project is now bootstrapped by copying files into `/opt/projects/osint/`.
+- `free_with_api.md` — catalog of free and paid OSINT APIs. Useful reference for what the agent can do per API key in `.env`.
+- `leaks_dbs.md` — list of known leak search databases. The agent uses `data/leaks/` to cache results.
+- `ARCHITECTURE.md` — cascade engine overview. OpenClaw terminology, but the engine design carries over to hermes.
+- `TODO.md` — pending work.
+- `pyproject.toml` — Python project config. Use `uv` rather than `pip` to manage the venv.
+- `src/main.py` — CLI entry point. The hermes agent invokes this via `python3 src/main.py --query "<entity>" [...]`.
 - `src/ascend_client.py` — wraps the ascend scraper for web fetches.
 - `src/cascade.py` — cascade engine that follows connections up to depth 3.
-- `src/<tool>.py` — per-tool integrations (hunter_io, virustotal, maigret, sherlock, etc.).
-- `tests/` — pytest test suite.
-
-Runtime state (gitignored):
-
-- `.venv/` — Python virtualenv. Built once per machine. Use `python3` from inside this venv.
+- `src/services/`` — per-service code: `breach_service.py`, `people_service.py`, `spiderfoot_service.py`, `recon_service.py`, `local_leak_service.py`, etc.
+- `src/captcha_handler.py` — helper for asking the user to resolve CAPTCHAs in Discord.
+- `src/theHarvester/` — third-party tool, vendored. Run via the project venv.
+- `Amass/` — third-party tool, vendored. Run via the project venv.
+- `bin/` — vendored binaries (subfinder, httpx, amass, naabu, mosint).
+- `tests/` — pytest test suite (some files like `test_system.py` come from OpenClaw).
+- `data/leaks/` — cached leak database output (gitignored at runtime; tracked only as `data/leaks/.gitkeep`).
 - `reports/` — generated markdown reports per investigation.
-- `cache/` — cached API responses.
-- `logs/` — pipeline logs.
+
+Runtime state (gitignored via `fork/projects/.gitignore`):
+
+- `.venv/` — Python virtualenv. Built once per machine via `uv venv .venv --python python3.12` (the OSINT stack pulls in tools that need 3.11+, hermes container has 3.13 but `.venv` is independent).
+- `data/` — all investigation data, including `data/leaks/`.
+- `logs/` — investigation logs.
+- `*.csv` — ad-hoc exports.
+- `reports/` — generated markdown reports.
 
 ## Per-investigation workflow
 
@@ -58,13 +83,13 @@ These need manual workarounds, not the agent:
 - eKRS — CAPTCHA
 - LinkedIn, Twitter/X — blocks scrapers
 
-For blocked services, suggest the user opens the URL in their browser manually or use Maigret/Sherlock instead.
+For blocked services, suggest the user opens the URL in their browser manually or use Maigret/Sherlock instead. The `captcha_handler.py` module sends the user a Discord DM with a link and asks them to paste the result back.
 
-## Tooling
+## Tool conventions
 
 - For ALL web scraping, use the ascend scraper (`src/ascend_client.py`, via `$ASCEND_SCRAPPER_URL`). NEVER use Playwright or Selenium in this project.
 - For Polish JDG companies, the cascade engine handles the name extraction automatically.
-- For blocked services, suggest manual workarounds.
+- For blocked services, suggest manual workarounds via `captcha_handler.py`.
 
 ## Available data sources
 
@@ -83,6 +108,30 @@ From `.env`:
 - `DEHASHED_API_KEY` — breach data
 - `NUMVERIFY_API_KEY` — phone validation
 - `IPQS_API_KEY` — IP quality score
+
+## First-time setup
+
+```bash
+cd /opt/projects/osint
+uv venv .venv --python python3.12
+source .venv/bin/activate
+uv pip install -e .   # or: uv pip install -r requirements.txt if you have one
+# Smoke test
+python3 src/main.py --query "test@example.com" --no-cascade --format markdown
+```
+
+## Known paths to update
+
+The Python code in `src/` is currently in transition from OpenClaw paths to hermes paths. Before this project is fully production-ready on hermes, the following hardcoded references must be reviewed and updated by the agent:
+
+- `src/services/breach_service.py` — hardcodes `/home/node/.openclaw/workspace/osint/.venv/bin/python3` for spawning h8mail / holehe subprocesses. Replace with `/opt/projects/osint/.venv/bin/python3` or a derived path.
+- `src/services/people_service.py` — hardcodes `/home/node/.openclaw/workspace/osint/.venv/bin/python3` and `/home/node/.openclaw/workspace/osint/data` output paths. Replace.
+- `src/services/recon_service.py` — hardcodes `.venv/bin/python3` and `theHarvester` paths. Replace.
+- `src/services/spiderfoot_service.py` — hardcodes `.venv/bin/python3`. Replace.
+- `src/services/local_leak_service.py` — hardcodes `data/leaks`. Relative path is fine.
+- `src/captcha_handler.py` — uses `["openclaw", "message", "send", ...]` shell-out pattern. Replace with the `discord.send` gateway tool path or a simpler approach.
+
+Run `grep -rn '.openclaw\|/home/node' .` from the project root to find every hardcoded reference. Replace each with paths derived from `os.path.dirname(__file__)` or the project env.
 
 ## What this project is NOT
 
