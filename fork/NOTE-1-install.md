@@ -18,9 +18,9 @@ This note covers a clean install from zero to working. For day-to-day operations
 | `Dockerfile.fork` | Extends `hermes-agent:fork` with a `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the TUI dist when `--tui` triggers a rebuild on startup |
 | `.env` | Local-only secrets, gitignored, auto-loaded by Compose for variable substitution |
 | `.env.fork.example` | Committed template — copy to `.env` and fill |
-| `fork/config.yaml.example` | The single `skills.external_dirs` snippet to merge into `hermes-data/config.yaml` so `my-skills/` is discovered |
-| `hermes-data/` | Persistent Hermes state (config, sessions, OAuth tokens, credentials). Gitignored except `SOUL.md` |
-| `my-skills/` | User-authored skill folders, read-only mount into the container |
+| `fork/config.yaml.example` | The single `skills.external_dirs` snippet to merge into `hermes-data/config.yaml` so `.agents/skills/` is discovered |
+| `hermes-data/` | Persistent Hermes state (config, sessions, OAuth tokens, credentials). Gitignored except `SOUL.md` (selective tracking pattern in `fork/NOTE-6-minipc-proxmox.md`) |
+| `.agents/skills/` | User-authored skill folders, read-only mount into the container as `/opt/data/external-skills`. Tracked in git, mirrors a curated subset of `Lukk17/agent-standards/.agents/skills/` |
 
 ### Step 1 — copy the env template
 
@@ -38,7 +38,7 @@ For Discord, paste the bot token from the Developer Portal:
 DISCORD_BOT_TOKEN=<bot-token>
 ```
 
-Leave `DISCORD_ALLOWED_USERS` empty plus set `GATEWAY_ALLOW_ALL_USERS=true` if you want unrestricted access. Otherwise fill `DISCORD_ALLOWED_USERS` with comma-separated user IDs.
+Leave `DISCORD_ALLOWED_USERS` empty plus set `GATEWAY_ALLOW_ALL_USERS=true` if you want unrestricted access. Otherwise fill `DISCORD_ALLOWED_USERS` with comma-separated Discord user IDs.
 
 ### Step 3 — fill any skill API keys
 
@@ -74,7 +74,7 @@ skills:
     - /opt/data/external-skills
 ```
 
-Without this, the folders in `my-skills/` are mounted into the container but not discovered.
+Without this, the folders in `.agents/skills/` are mounted into the container but not discovered.
 
 ### Step 7 — apply config and verify
 
@@ -97,7 +97,7 @@ From another machine on your LAN or remote: SSH tunnel — see fork/NOTE-4-secur
 
 ### Where state lives
 
-- `./my-skills/` — user-authored skills, read-only mount source
+- `./.agents/skills/` — user-authored skills, read-only mount source (single source of truth for both hermes and the coding agents)
 - `./.env` — Compose-time secrets, gitignored
 - `./Dockerfile.fork` — TUI-chown fix layered on the upstream image
 - `./hermes-data/config.yaml` — Hermes runtime config (model, provider, `skills.external_dirs`)
@@ -105,4 +105,11 @@ From another machine on your LAN or remote: SSH tunnel — see fork/NOTE-4-secur
 - `./hermes-data/credentials/` — skill credential files such as `google_token.json`
 - `./hermes-data/sessions/` — conversation history
 - `./hermes-data/skills/` — bundled + agent-created skills
-- `./hermes-data/SOUL.md` — agent personality, the only file under `hermes-data/` that's tracked in git
+- `./hermes-data/SOUL.md` — agent personality, the only file under `hermes-data/` that's tracked in git by default (add more via `hermes-data/.gitignore` per `fork/NOTE-6-minipc-proxmox.md`)
+
+### Deploying to a minipc (Proxmox VM with Docker Engine)
+
+See `fork/NOTE-6-minipc-proxmox.md` for the minipc-specific deltas: which
+files to copy, how to pull the prebuilt image from Docker Hub, how to keep
+`.agents/skills/` in sync from `agent-standards`, and the optional nginx
+reverse-proxy setup if you want LAN browser access without an SSH tunnel.

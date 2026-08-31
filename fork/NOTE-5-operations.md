@@ -115,7 +115,7 @@ docker compose up -d --force-recreate gateway
 
 ### Adding a new user-authored skill
 
-Drop a new folder under `my-skills/` with a `SKILL.md` (YAML frontmatter: `name`, `description`, optional `version`, `metadata.hermes.tags`).
+Drop a new folder under `.agents/skills/` with a `SKILL.md` (YAML frontmatter: `name`, `description`, optional `version`, `metadata.hermes.tags`). To copy content from agent-standards if it exists upstream, use the `git archive` snippet in `fork/NOTE-6-minipc-proxmox.md`.
 
 Hermes scans `external_dirs` on session start, so the new skill appears in the next session. Force a rescan without restarting:
 
@@ -170,5 +170,5 @@ rsync -a --delete ./hermes-data/ ./hermes-data-backup/
 | `Unauthorized user` in gateway logs | `GATEWAY_ALLOW_ALL_USERS=true` not set, or fill `DISCORD_ALLOWED_USERS` |
 | `hermes doctor` reports auth missing | Re-run the OAuth flow for that provider |
 | `host.docker.internal` not resolving | Already handled by `extra_hosts` in the override; check Docker version supports `host-gateway` |
-| `my-skills/` content not visible | `skills.external_dirs` not in `./hermes-data/config.yaml`, or services not restarted after the edit |
+| `.agents/skills/` content not visible | `skills.external_dirs` not in `./hermes-data/config.yaml`, or services not restarted after the edit |
 | New env value not in container | Recreate the service: `docker compose up -d --force-recreate gateway` |
