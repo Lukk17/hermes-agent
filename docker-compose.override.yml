@@ -57,6 +57,4 @@ services:
     volumes:
       - ./hermes-data:/opt/data
       - ./fork/projects:/opt/projects
-      - ./.agents/skills:/opt/external-skills:ro
-      - ./skills:/opt/skills:ro
     command: ["dashboard", "--host", "127.0.0.1", "--port", "9119", "--insecure", "--no-open", "--tui"]

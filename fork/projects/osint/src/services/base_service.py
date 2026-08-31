@@ -1,0 +1,67 @@
+import asyncio
+import requests
+import os
+
+
+def get_env(key: str) -> str | None:
+    return os.environ.get(key)
+
+
+class BaseService:
+    def __init__(self):
+        pass
+
+    def get_env(self, key: str) -> str | None:
+        return os.environ.get(key)
+
+    async def _get(self, url: str, **kwargs) -> dict:
+        loop = asyncio.get_running_loop()
+        def blocking_get():
+            kwargs.setdefault("timeout", 20)
+            for attempt in range(4):
+                try:
+                    r = requests.get(url, **kwargs)
+                    if r.status_code == 429 or r.status_code >= 500:
+                        if attempt < 3:
+                            delay = 2 ** attempt
+                            import time
+                            time.sleep(delay)
+                        r.raise_for_status()
+                    else:
+                        r.raise_for_status()
+                    return r.json()
+                except requests.exceptions.HTTPError as e:
+                    if attempt < 3 and e.response.status_code in (429, 500, 502, 503, 504):
+                        delay = 2 ** attempt
+                        import time
+                        time.sleep(delay)
+                        continue
+                    raise
+            raise Exception("Max retries exceeded")
+        return await loop.run_in_executor(None, blocking_get)
+
+    async def _post(self, url: str, **kwargs) -> dict:
+        loop = asyncio.get_running_loop()
+        def blocking_post():
+            kwargs.setdefault("timeout", 20)
+            for attempt in range(4):
+                try:
+                    r = requests.post(url, **kwargs)
+                    if r.status_code == 429 or r.status_code >= 500:
+                        if attempt < 3:
+                            delay = 2 ** attempt
+                            import time
+                            time.sleep(delay)
+                        r.raise_for_status()
+                    else:
+                        r.raise_for_status()
+                    return r.json()
+                except requests.exceptions.HTTPError as e:
+                    if attempt < 3 and e.response.status_code in (429, 500, 502, 503, 504):
+                        delay = 2 ** attempt
+                        import time
+                        time.sleep(delay)
+                        continue
+                    raise
+            raise Exception("Max retries exceeded")
+        return await loop.run_in_executor(None, blocking_post)

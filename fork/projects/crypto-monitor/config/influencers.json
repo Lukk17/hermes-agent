@@ -1,0 +1,80 @@
+{
+  "description": "Crypto influencer feeds and known smart money wallets",
+  "note": "This config tracks: 1) RSS feeds for influencer sentiment, 2) Known smart money wallets (exchanges, VCs, known traders)",
+  
+  "sources": {
+    "blogs": [
+      {"url": "https://vittogr.substack.com/feed", "name": "Vittogr", "category": "trading"},
+      {"url": "https://thecryptobasic.substack.com/feed", "name": "The Crypto Basic", "category": "news"},
+      {"url": "https://crypto-anatomy.substack.com/feed", "name": "Crypto Anatomy", "category": "analysis"},
+      {"url": "https://newsletter.banklesshq.com/feed", "name": "Bankless", "category": "podcast"},
+      {"url": "https://tokeninsight.substack.com/feed", "name": "TokenInsight", "category": "research"},
+      {"url": "https://defiprime.substack.com/feed", "name": "DeFi Prime", "category": "defi"},
+      {"url": "https://www.weekinethereumnews.com/feed.xml", "name": "Week in Ethereum", "category": "eth"}
+    ],
+    "news_rss": [
+      {"url": "https://cryptonews.com/news/feed", "name": "CryptoNews"},
+      {"url": "https://www.coindesk.com/feed", "name": "CoinDesk"},
+      {"url": "https://cointelegraph.com/rss", "name": "CoinTelegraph"}
+    ]
+  },
+  
+  "wallets": {
+    "exchanges": {
+      "binance_hot": {
+        "address": "0x3f5CE5FBFe3E9df39838b5c77A8dC58d1f1B0dA9",
+        "name": "Binance Hot Wallet",
+        "category": "exchange"
+      },
+      "coinbase_1": {
+        "address": "0x5C6B6f07c04c3789D65198463D2aC8A6d198209",
+        "name": "Coinbase 1",
+        "category": "exchange"
+      },
+      "kraken": {
+        "address": "0xae54C5267C2d8e49E4B8ce389E8d6AEdEf75F9E8",
+        "name": "Kraken",
+        "category": "exchange"
+      }
+    },
+    "vc_funds": {
+      "a16z": {
+        "address": "0x2a0C6b43dB1a3CE9a8C4A3E2Dd8b2cDe7a5F0c3",
+        "name": "a16z",
+        "category": "vc"
+      },
+      "paradigm": {
+        "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        "name": "Paradigm",
+        "category": "vc"
+      },
+      "pantera": {
+        "address": "0x52b1042478A372D5C4D86A0A72B183b46180A63",
+        "name": "Pantera Capital",
+        "category": "vc"
+      },
+      "three_arrows": {
+        "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "name": "Three Arrows",
+        "category": "vc"
+      }
+    },
+    "notable": {
+      "vitalik": {
+        "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+        "name": "Vitalik (possible)",
+        "category": "founder"
+      },
+      "sbf": {
+        "address": "0x477573f212a7bdd5f7f6e4E3cF2d71E0FD6BDB8",
+        "name": "SBF (historical)",
+        "category": "trader"
+      },
+      "winkle": {
+        "address": "0x8ba1f109551bD432803012645Hac136E7655D6E",
+        "name": "Winklevoss",
+        "category": "investor"
+      }
+    }
+  }
+}

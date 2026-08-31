@@ -1,0 +1,73 @@
+# Fork-level gitignore for all project workspaces under fork/projects/
+# Each project is gitignored independently so venvs, caches, runtime data,
+# and secrets stay out of git. This is the shared rule; per-project overrides
+# go in <project>/.gitignore if a project needs extra exclusions.
+
+# Python virtualenvs (every project under fork/projects/ has its own)
+venv/
+.venv/
+env/
+.python-version
+
+# Python caches and build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+build/
+dist/
+.pytest_cache/
+.coverage
+.tox/
+.cache/
+.pytest-cache/
+
+# Test artifacts
+test_durations.json
+htmlcov/
+.coverage.*
+coverage.xml
+*.cover
+.pytest-cache/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and runtime output
+*.log
+logs/
+output/
+runs/
+*.out
+
+# OS and shell
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.bak.*
+
+# Local config files (per-machine secrets, paths)
+.env
+.env.local
+.env.*.local
+*.local
+config.local.*
+
+# Node / JS (only relevant if a project brings a frontend)
+node_modules/
+*.log
+dist/
+
+# Data caches (per-machine)
+data/cache/
+*.cache
+.cache/
+.cache.lock
+*.lock

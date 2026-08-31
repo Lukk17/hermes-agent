@@ -1,0 +1,140 @@
+{
+  "discord": {
+    "channel_id": 1470798824791343317,
+    "channel_name": "crypto-monitor"
+  },
+  "api_endpoints": {
+    "coingecko": "https://api.coingecko.com/api/v3",
+    "coingecko_simple_price": "https://api.coingecko.com/api/v3/simple/price",
+    "coingecko_markets": "https://api.coingecko.com/api/v3/coins/markets",
+    "coingecko_global": "https://api.coingecko.com/api/v3/global",
+    "coingecko_coin": "https://api.coingecko.com/api/v3/coins",
+    "coingecko_market_chart": "https://api.coingecko.com/api/v3/coins/{id}/market_chart",
+    "fear_greed": "https://api.alternative.me/fng/",
+    "fear_greed_limit": "https://api.alternative.me/fng/?limit=1",
+    "blockchain_info": "https://api.blockchain.info",
+    "blocknative_gas": "https://api.blocknative.com/gasprices/blockprices",
+    "mempool": "https://mempool.space/api",
+    "mempool_address": "https://mempool.space/api/address/{address}",
+    "mempool_prices": "https://mempool.space/api/v1/prices",
+    "blockscout": "https://eth.blockscout.com/api/v2",
+    "blockscout_address": "https://eth.blockscout.com/api/v2/addresses/{address}",
+    "blockscout_transactions": "https://eth.blockscout.com/api/v2/addresses/{address}/transactions",
+    "blockscout_addresses": "https://eth.blockscout.com/api/v2/addresses",
+    "alchemy": "https://eth-mainnet.g.alchemy.com/v2",
+    "alchemy_api": "https://api.alchemy.com/v2",
+    "bybit": "https://api.bybit.com/v5/market/tickers",
+    "whale_alert": "https://api.whale-alert.io/v1",
+    "whale_alert_public": "https://whale-alert.io",
+    "whale_alert_developer": "https://developer.whale-alert.io",
+    "cryptopanic": "https://cryptopanic.com/api/developer/v2/posts/",
+    "farside_btc": "https://farside.co.uk/btc/",
+    "farside_eth": "https://farside.co.uk/eth/",
+    "blockchaincenter_altseason": "https://www.blockchaincenter.net/en/altcoin-season-index/",
+    "blockchaincenter_bullbear": "https://www.blockchaincenter.net/en/bull-bear-sentiment/",
+    "coinbase_cbbi": "https://colintalkscrypto.com/cbbi/",
+    "coinbase_cbbi_api": "https://colintalkscrypto.com/cbbi/api/v1/current",
+    "coinglass": "https://www.coinglass.com/api/proxy/index/FearGreed",
+    "chainintel": "https://chainintel.io/whale-tracker",
+    "ascend_web": "http://host.docker.internal:7021",
+    "ascend_web_docs": "http://host.docker.internal:7021/docs",
+    "ascend_web_read": "http://host.docker.internal:7021/api/v1/web/read",
+    "yahoo_finance": "https://query1.finance.yahoo.com/v8/finance/chart",
+    "blockchaincenter_api": "https://blockchaincenter.net/api/altseason"
+  },
+  "thresholds": {
+    "verify_wallets": {
+      "min_btc_balance": 0.01,
+      "min_eth_balance": 0.1
+    },
+    "whale_signals": {
+      "min_btc_move": 1.0,
+      "min_eth_move": 10.0,
+      "min_sol_move": 100.0
+    },
+    "whale_discovery": {
+      "min_btc_balance": 1000,
+      "min_eth_balance": 50000
+    },
+    "airdrop": {
+      "probability_scores": {
+        "very_high": 95,
+        "high": 75,
+        "medium": 50,
+        "low_to_medium": 35,
+        "low": 20,
+        "unknown": 30
+      },
+      "historical_avg_values": {
+        "defi": 2000,
+        "gaming": 800,
+        "infrastructure": 1500,
+        "ai_and_compute": 2000,
+        "bitcoin_ecosystem": 1500,
+        "default": 1500
+      },
+      "cost_estimates": {
+        "free": 0,
+        "low": 50,
+        "medium": 150,
+        "high": 500,
+        "very_high": 1000,
+        "default": 150
+      }
+    }
+  },
+  "chart_settings": {
+    "colors": {
+      "bg": "#0d1117",
+      "card": "#161b22",
+      "text": "#e6edf3",
+      "green": "#3fb950",
+      "red": "#f85149",
+      "yellow": "#d29922",
+      "orange": "#db6d28",
+      "blue": "#58a6ff",
+      "purple": "#bc8cff",
+      "gray": "#484f58",
+      "muted": "#8b949e"
+    },
+    "font": "DejaVu Sans",
+    "dpi": 300
+  },
+  "external_links": {
+    "quick_links": [
+      "https://cryptobubbles.net/",
+      "https://alternative.me/crypto/fear-and-greed-index/",
+      "https://www.blockchaincenter.net/en/altcoin-season-index/",
+      "https://www.blockchaincenter.net/en/bitcoin-rainbow-chart/"
+    ],
+    "airdrop_links": [
+      "https://app.getgrass.io",
+      "https://monad.xyz",
+      "https://berachain.com",
+      "https://fuel.network",
+      "https://scroll.io"
+    ]
+  },
+  "data_paths": {
+    "base_dir": "data",
+    "reports_dir": "data/reports",
+    "coin_prices": "data/coin_prices/coin_prices_latest.json",
+    "fear_greed": "data/fear_greed/fear_greed_latest.json",
+    "global_market": "data/global_market/global_market_latest.json",
+    "trending": "data/trending/trending_latest.json",
+    "cycle": "data/cycle/cycle_latest.json",
+    "sentiment": "data/sentiment/sentiment_latest.json",
+    "trends": "data/trends/trends_latest.json",
+    "whale_signals": "data/whale_signals/whale_signals_latest.json",
+    "whales": "data/whales/whales_latest.json",
+    "airdrops": "data/airdrops/airdrops_latest.json",
+    "exchange_flows": "data/exchange_flows/exchange_flows_latest.json",
+    "dominance": "data/dominance/dominance_latest.json",
+    "sectors": "data/sectors/sectors_latest.json",
+    "gas": "data/gas/gas_latest.json",
+    "etf_flows": "data/etf_flows/etf_flows_latest.json",
+    "stablecoins": "data/stablecoins/stablecoins_latest.json",
+    "influencers": "data/influencers/influencers_latest.json",
+    "market_breadth": "data/market_breadth/market_breadth_latest.json"
+  }
+}
