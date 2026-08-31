@@ -1,0 +1,11 @@
+/*
+
+!/.gitignore
+!/SOUL.md
+!/config.yaml
+!/cron
+!/cron/**
+!/projects
+!/projects/**
+!/plugins
+!/plugins/**

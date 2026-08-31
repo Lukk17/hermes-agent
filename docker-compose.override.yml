@@ -6,7 +6,7 @@ services:
     volumes:
       - !reset ~/.hermes:/opt/data
       - ./hermes-data:/opt/data
-      - ./my-skills:/opt/data/external-skills:ro
+      - ./.agents/skills:/opt/data/external-skills:ro
     environment:
       # Messaging
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
@@ -15,6 +15,7 @@ services:
       - DISCORD_REQUIRE_MENTION=${DISCORD_REQUIRE_MENTION:-true}
       - DISCORD_FREE_RESPONSE_CHANNELS=${DISCORD_FREE_RESPONSE_CHANNELS:-}
       - DISCORD_AUTO_THREAD=${DISCORD_AUTO_THREAD:-false}
+      - DISCORD_COMMAND_SYNC_POLICY=${DISCORD_COMMAND_SYNC_POLICY:-off}
       - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
 
       # On-chain
@@ -46,12 +47,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.fork
-    image: hermes-agent:fork-tui
+    image: hermes-agent:fork-dashboard
     network_mode: !reset null
     ports:
       - "127.0.0.1:9119:9119"
     volumes:
       - !reset ~/.hermes:/opt/data
       - ./hermes-data:/opt/data
-      - ./my-skills:/opt/data/external-skills:ro
+      - ./.agents/skills:/opt/data/external-skills:ro
     command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--insecure", "--no-open", "--tui"]
