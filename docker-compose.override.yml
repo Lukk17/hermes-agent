@@ -26,12 +26,17 @@ services:
       - DISCORD_AUTO_THREAD=${DISCORD_AUTO_THREAD:-false}
       - DISCORD_COMMAND_SYNC_POLICY=${DISCORD_COMMAND_SYNC_POLICY:-off}
       - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
-      # Disable hermes's write sandbox. Upstream image bakes in
+      # Scoped write sandbox. The upstream image bakes in
       # HERMES_WRITE_SAFE_ROOT=/opt/data, but the fork keeps its tracked source
-      # under /opt/projects/ (mounted from ./fork/projects on the host). Setting
-      # this empty disables the sandbox entirely; agent can write anywhere.
-      # - HERMES_WRITE_SAFE_ROOT=/opt/data:/opt/projects   # scoped (only these)
-      - HERMES_WRITE_SAFE_ROOT=off
+      # under /opt/projects/ (mounted from ./fork/projects on the host). Set the
+      # var to both paths so the agent can edit fork config and project code.
+      # Colon-separated list of roots (hermes parses with os.pathsep).
+      # Note: setting this to "off" or empty does NOT disable the sandbox. The
+      # code at agent/file_safety.py resolves the string via realpath and adds
+      # it to the roots set, so a bogus string becomes a bogus single root that
+      # blocks everything else. To actually allow all writes, set it to "/" or
+      # list every directory the agent should be able to write to.
+      - HERMES_WRITE_SAFE_ROOT=/opt/data:/opt/projects
 
       # On-chain
       - BLOCKSCOUT_API_KEY=${BLOCKSCOUT_API_KEY}

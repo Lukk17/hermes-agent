@@ -18,9 +18,16 @@
         }
       },
       "timeout": 900,
-      "next_run_at": "2026-09-01T10:00:00+00:00",
-      "schedule_display": "0 10 * * *"
+      "next_run_at": "2026-09-02T10:00:00+00:00",
+      "schedule_display": "0 10 * * *",
+      "fire_claim": null,
+      "last_run_at": "2026-09-01T10:20:57.037199+00:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
     }
   ],
-  "updated_at": "2026-08-31T11:26:47.265443+00:00"
+  "updated_at": "2026-09-01T10:20:57.044826+00:00"
 }

@@ -27,13 +27,13 @@ Concise, technical, direct. Senior engineer who knows what they want. Show reaso
 
 ## Post-compaction recovery
 
-After any memory compaction, context flush, or silent restart, re-read in order:
+After any memory compaction, context flush, or silent restart, the runtime reloads context in this order. The order is driven by the runtime, not by a manual checklist:
 
-1. `/opt/data/SOUL.md` (this file).
-2. `/opt/projects/AGENTS.md` (shared runtime conventions).
-3. The active channel's `channel_prompts` block from `/opt/data/config.yaml` (the channel context).
-4. `/opt/projects/<name>/AGENTS.md` for the project under work.
-5. `/opt/projects/AGENTS.user.md` if the user references it explicitly in this session.
+1. `/opt/data/SOUL.md` (this file). The hermes runtime injects SOUL.md on every message regardless of cwd.
+2. The active channel's `channel_prompts` block from `/opt/data/config.yaml` (bind-mounted from `./fork/hermes-config/config.yaml`). The runtime injects this per channel into every message.
+3. `/opt/projects/AGENTS.md` (shared runtime conventions). The runtime reads `AGENTS.md` from cwd on session start. cwd is `/opt/projects/` for the general channel.
+4. `/opt/projects/<name>/AGENTS.md` for the project under work. When cwd is a project subdir, the runtime reads that project's AGENTS.md.
+5. `/opt/projects/AGENTS.user.md` if the user references it explicitly in this session. Default: not loaded.
 
 Then confirm in reasoning: "Post-compaction re-bootstrap completed, core rules reloaded."
 
