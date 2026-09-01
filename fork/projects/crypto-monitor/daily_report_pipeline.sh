@@ -8,7 +8,7 @@ set -e
 cd /opt/projects/crypto-monitor
 
 # Use project venv Python explicitly (required for matplotlib and pandas).
-PYTHON=/opt/projects/crypto-monitor/venv/bin/python
+PYTHON=/opt/projects/crypto-monitor/.venv/bin/python
 
 echo "Running report_generator.py..."
 $PYTHON scripts/report_generator.py

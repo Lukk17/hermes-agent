@@ -19,7 +19,7 @@ REPORT_DIR = PROJECT_ROOT / "data" / "reports"
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Use venv Python for matplotlib support
-PYTHON_BIN = PROJECT_ROOT / "venv" / "bin" / "python"
+PYTHON_BIN = PROJECT_ROOT / ".venv" / "bin" / "python"
 
 TIMEOUT = 60  # seconds per step
 

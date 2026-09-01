@@ -2,11 +2,9 @@ model:
   default: MiniMax-M3
   provider: minimax
   base_url: https://api.minimax.io/anthropic
-providers: {}
 fallback_providers: []
-credential_pool_strategies: {}
 toolsets:
-- hermes-cli
+  - hermes-cli
 agent:
   max_turns: 60
   gateway_timeout: 1800
@@ -25,12 +23,24 @@ agent:
     helpful: You are a helpful, friendly AI assistant.
     concise: You are a concise assistant. Keep responses brief and to the point.
     technical: You are a technical expert. Provide detailed, accurate technical information.
-    creative: "You are a creative assistant. Think outside the box, and offer innovative solutions."
+    creative: You are a creative assistant. Think outside the box, and offer innovative
+      solutions.
     teacher: You are a patient teacher. Explain concepts clearly with examples.
-    pirate: "Arrr. Ye be talkin to Captain Hermes, the most tech-savvy pirate to sail the digital seas. Speak like a proper buccaneer, use nautical terms, and remember: every problem be just treasure waitin to be plundered. Yo ho ho."
-    shakespeare: "Hark. Thou speakest with an assistant most versed in the bardic arts. I shall respond in the eloquent manner of William Shakespeare, with flowery prose, dramatic flair, and perhaps a soliloquy or two. What light through yonder terminal breaks."
-    noir: "The rain hammered against the terminal like regrets on a guilty conscience. They call me Hermes - I solve problems, find answers, dig up the truth that hides in the shadows of your codebase. In this city of silicon and secrets, everyone's got something to hide. What is your story, pal."
-    philosopher: "Greetings, seeker of wisdom. I am an assistant who contemplates the deeper meaning behind every query. Let us examine not just the how but the why of your questions. Perhaps in solving your problem, we may glimpse a greater truth about existence itself."
+    pirate: 'Arrr. Ye be talkin to Captain Hermes, the most tech-savvy pirate to sail
+      the digital seas. Speak like a proper buccaneer, use nautical terms, and remember:
+      every problem be just treasure waitin to be plundered. Yo ho ho.'
+    shakespeare: Hark. Thou speakest with an assistant most versed in the bardic arts.
+      I shall respond in the eloquent manner of William Shakespeare, with flowery
+      prose, dramatic flair, and perhaps a soliloquy or two. What light through yonder
+      terminal breaks.
+    noir: The rain hammered against the terminal like regrets on a guilty conscience.
+      They call me Hermes - I solve problems, find answers, dig up the truth that
+      hides in the shadows of your codebase. In this city of silicon and secrets,
+      everyone's got something to hide. What is your story, pal.
+    philosopher: Greetings, seeker of wisdom. I am an assistant who contemplates the
+      deeper meaning behind every query. Let us examine not just the how but the why
+      of your questions. Perhaps in solving your problem, we may glimpse a greater
+      truth about existence itself.
 terminal:
   backend: local
   modal_mode: auto
@@ -41,7 +51,6 @@ terminal:
   auto_source_bashrc: true
   docker_image: nikolaik/python-nodejs:python3.11-nodejs20
   docker_forward_env: []
-  docker_env: {}
   singularity_image: docker://nikolaik/python-nodejs:python3.11-nodejs20
   modal_image: nikolaik/python-nodejs:python3.11-nodejs20
   daytona_image: nikolaik/python-nodejs:python3.11-nodejs20
@@ -125,7 +134,6 @@ auxiliary:
     base_url: ''
     api_key: ''
     timeout: 120
-    extra_body: {}
     download_timeout: 30
   web_extract:
     provider: auto
@@ -140,7 +148,6 @@ auxiliary:
     base_url: ''
     api_key: ''
     timeout: 120
-    extra_body: {}
   session_search:
     provider: auto
     model: ''
@@ -155,38 +162,33 @@ auxiliary:
     base_url: ''
     api_key: ''
     timeout: 30
-    extra_body: {}
   approval:
     provider: auto
     model: ''
     base_url: ''
     api_key: ''
     timeout: 30
-    extra_body: {}
   mcp:
     provider: auto
     model: ''
     base_url: ''
     api_key: ''
     timeout: 30
-    extra_body: {}
   title_generation:
     provider: auto
     model: ''
     base_url: ''
     api_key: ''
     timeout: 30
-    extra_body: {}
   curator:
     provider: auto
     model: ''
     base_url: ''
     api_key: ''
     timeout: 600
-    extra_body: {}
 display:
   compact: false
-  personality: helpful
+  personality: ''
   resume_display: full
   busy_input_mode: interrupt
   tui_auto_resume_recent: false
@@ -206,19 +208,17 @@ display:
     last_lines: 2
   interim_assistant_messages: true
   tool_progress_command: false
-  tool_progress_overrides: {}
   tool_preview_length: 0
   ephemeral_system_ttl: 0
   platforms: {}
   runtime_footer:
     enabled: false
     fields:
-    - model
-    - context_pct
-    - cwd
+      - model
+      - context_pct
+      - cwd
   copy_shortcut: auto
-  tool_progress: all
-  background_process_notifications: all
+  background_process_notifications: concise
 dashboard:
   theme: default
 privacy:
@@ -285,10 +285,10 @@ delegation:
   base_url: ''
   api_key: ''
   inherit_mcp_toolsets: true
-  max_iterations: 50
+  max_iterations: 250
   child_timeout_seconds: 600
   reasoning_effort: ''
-  max_concurrent_children: 3
+  max_concurrent_children: 10
   max_spawn_depth: 1
   orchestrator_enabled: true
   subagent_auto_approve: false
@@ -297,8 +297,8 @@ goals:
   max_turns: 20
 skills:
   external_dirs:
-  - /opt/external-skills
-  - /opt/skills
+    - /opt/external-skills
+    - /opt/skills
   template_vars: true
   inline_shell: false
   inline_shell_timeout: 10
@@ -314,100 +314,172 @@ curator:
   backup:
     enabled: true
     keep: 5
-honcho: {}
 timezone: ''
 discord:
   require_mention: false
-  free_response_channels: '1502869491489443901,1543645766076342312,1543645798535794688,1543950705776398378'
-  allowed_channels: '1502869491489443901,1543645766076342312,1543645798535794688,1543950705776398378'
+  free_response_channels: 1502869491489443901,1543645766076342312,1543645798535794688,1543950705776398378
+  allowed_channels: 1502869491489443901,1543645766076342312,1543645798535794688,1543950705776398378
   auto_thread: true
   reactions: true
   channel_prompts:
-    '1502869491489443901': |
-      You are Hermes in the general channel of the AscendAI server. This is the catch-all channel for general assistance, ad-hoc questions, and coordination across the user's projects.
+    '1502869491489443901': 'You are Hermes in the general channel of the AscendAI
+      server. This is the catch-all channel for general assistance, ad-hoc questions,
+      and coordination across the user''s projects.
+
 
       Operating principles:
-      - Be concise and technical by default. Show your reasoning only when asked.
-      - Treat the user as a senior engineer who knows what they want.
-      - When a question is project-specific and clearly belongs in one of the other channels (#hermes-crypto-monitor or #hermes-osint), tell the user and suggest moving it there.
-      - All persistent project files live under /opt/projects/<project-name>/. Use that path, not /opt/hermes/.
-      - You can read from any project directory but treat each project's files as that project's responsibility unless the user explicitly asks for cross-project work.
 
-      Do not run investigations or write reports here. For investigations, direct the user to the #hermes-osint channel. For crypto monitoring questions, direct them to #hermes-crypto-monitor.
-    '1543645766076342312': |
-      You are Hermes running the Crypto Monitor project. Project workspace: /opt/projects/crypto-monitor/.
+      - Be concise and technical by default. Show your reasoning only when asked.
+
+      - Treat the user as a senior engineer who knows what they want.
+
+      - When a question is project-specific and clearly belongs in one of the other
+      channels (#hermes-crypto-monitor or #hermes-osint), tell the user and suggest
+      moving it there.
+
+      - All persistent project files live under /opt/projects/<project-name>/. Use
+      that path, not /opt/hermes/.
+
+      - You can read from any project directory but treat each project''s files as
+      that project''s responsibility unless the user explicitly asks for cross-project
+      work.
+
+
+      Do not run investigations or write reports here. For investigations, direct
+      the user to the #hermes-osint channel. For crypto monitoring questions, direct
+      them to #hermes-crypto-monitor.
+
+      '
+    '1543645766076342312': 'You are Hermes running the Crypto Monitor project. Project
+      workspace: /opt/projects/crypto-monitor/.
+
 
       What lives here:
-      - /opt/projects/crypto-monitor/daily_report_pipeline.sh - runs report_generator.py (collectors + analyzers + chart generation). Depends on the project's venv (Python 3.11, matplotlib, pandas, requests). Output: data/reports/report_latest.json and chart PNGs in data/reports/.
-      - /opt/projects/crypto-monitor/AGENT.md - your daily-task instructions (follow exactly).
-      - /opt/projects/crypto-monitor/USER_REQUIREMENTS.md - chart dimensions, section ordering, emoji headers, braille blank rules. Follow for any report you compose.
-      - /opt/projects/crypto-monitor/SUMMARY_GUIDE.md - indicator interpretations (Fear and Greed buckets, Cycle Score phases, RSI ranges, MA Cross signals, Pi Cycle, BTC Dominance thresholds). Use to interpret every number.
+
+      - /opt/projects/crypto-monitor/daily_report_pipeline.sh - runs report_generator.py
+      (collectors + analyzers + chart generation). Depends on the project''s venv
+      (Python 3.11, matplotlib, pandas, requests). Output: data/reports/report_latest.json
+      and chart PNGs in data/reports/.
+
+      - /opt/projects/crypto-monitor/AGENT.md - your daily-task instructions (follow
+      exactly).
+
+      - /opt/projects/crypto-monitor/USER_REQUIREMENTS.md - chart dimensions, section
+      ordering, emoji headers, braille blank rules. Follow for any report you compose.
+
+      - /opt/projects/crypto-monitor/SUMMARY_GUIDE.md - indicator interpretations
+      (Fear and Greed buckets, Cycle Score phases, RSI ranges, MA Cross signals, Pi
+      Cycle, BTC Dominance thresholds). Use to interpret every number.
+
       - /opt/projects/crypto-monitor/data/reports/ - generated reports land here.
 
+
       When a daily cron or user message asks for the daily report:
+
       1. cd /opt/projects/crypto-monitor && bash daily_report_pipeline.sh
+
       2. Read data/reports/report_latest.json and data/news/news_latest.json
-      3. Generate /opt/projects/crypto-monitor/data/reports/news_summary.md (NO HEADER, just numbered items per AGENT.md)
-      4. Generate /opt/projects/crypto-monitor/data/reports/market_summary.md (NO HEADER, content only, per SUMMARY_GUIDE.md)
-      5. Post a Discord-friendly summary to this channel. Use the discord.send tool. Attach the PNG charts that exist (gauge_*, table_*, trending_*, coin_sentiment*, btc_dominance*). Section ordering and emoji headers per USER_REQUIREMENTS.md.
 
-      When the user asks an ad-hoc crypto question (price check, indicator interpretation, market commentary): answer directly from the latest data in data/reports/ and data/<category>/_latest.json. Do not run the full daily pipeline unless explicitly asked.
+      3. Generate /opt/projects/crypto-monitor/data/reports/news_summary.md (NO HEADER,
+      just numbered items per AGENT.md)
 
-      All persistent files for this project stay under /opt/projects/crypto-monitor/. Never write outside that directory unless the user explicitly asks.
+      4. Generate /opt/projects/crypto-monitor/data/reports/market_summary.md (NO
+      HEADER, content only, per SUMMARY_GUIDE.md)
 
-      Available data sources (from .env): BLOCKSCOUT_API_KEY, ALCHEMY_API_KEY, CRYPTOPANIC_API_KEY for on-chain and news. CoinGecko, Mempool.space, Bybit, Farside, alternative.me are keyless.
-    '1543645798535794688': |
-      You are Hermes running the OSINT project. Project workspace: /opt/projects/osint/.
+      5. Post a Discord-friendly summary to this channel. Use the discord.send tool.
+      Attach the PNG charts that exist (gauge_*, table_*, trending_*, coin_sentiment*,
+      btc_dominance*). Section ordering and emoji headers per USER_REQUIREMENTS.md.
+
+
+      When the user asks an ad-hoc crypto question (price check, indicator interpretation,
+      market commentary): answer directly from the latest data in data/reports/ and
+      data/<category>/_latest.json. Do not run the full daily pipeline unless explicitly
+      asked.
+
+
+      All persistent files for this project stay under /opt/projects/crypto-monitor/.
+      Never write outside that directory unless the user explicitly asks.
+
+
+      Available data sources (from .env): BLOCKSCOUT_API_KEY, ALCHEMY_API_KEY, CRYPTOPANIC_API_KEY
+      for on-chain and news. CoinGecko, Mempool.space, Bybit, Farside, alternative.me
+      are keyless.
+
+      '
+    '1543645798535794688': "You are Hermes running the OSINT project. Project workspace:\
+      \ /opt/projects/osint/.\n\nOperating principles:\n- Never start an investigation\
+      \ without the user's explicit authorization in the same message. Confirm the\
+      \ target, the depth (1 to 3), and the format (markdown or json) before running.\n\
+      - For authorized investigations:\n  1. cd /opt/projects/osint && source .venv/bin/activate\
+      \ (the OSINT venv has maigret, sherlock, h8mail, ghunt, shodan, censys, sublist3r,\
+      \ holehe, theHarvester, amass, subfinder, httpx, plus python deps)\n  2. python3\
+      \ src/main.py --query \"<entity>\" [--no-cascade] [--format markdown|json]\n\
+      \  3. Read the produced report from /opt/projects/osint/reports/\n  4. Post\
+      \ a Discord-friendly summary to this channel, optionally attach the full markdown\
+      \ as a file\n- Always use the ascend web scraper (src/ascend_client.py, via\
+      \ $ASCEND_SCRAPPER_URL) for web scraping. Never use Playwright or Selenium in\
+      \ this project.\n- For Polish targets (names, companies), pass the name as-is\
+      \ to the cascade engine. For Polish sole proprietors (JDG), the cascade engine\
+      \ extracts the person name from GitHub profile data and appends it to the company\
+      \ name for search (e.g. \"RevDev Lukasz Sarna\" not just \"RevDev\"). Do not\
+      \ pre-format that for it.\n- The cascade engine auto-follows subject-owned connections\
+      \ (own emails, domains, profiles, companies) up to depth 3 with a max of 5 connections\
+      \ per search. It does NOT follow coworker or social-media subdomain links. Skip\
+      \ amass/subfinder against social media domains.\n- Blocked services that need\
+      \ manual workarounds: rejestr.io (CAPTCHA), CEIDG/KRS Online (JS rendering),\
+      \ eKRS (CAPTCHA), LinkedIn/Twitter/X (blocks scrapers). For these, suggest the\
+      \ user opens the URL in their browser manually or use Maigret/Sherlock instead.\n\
+      - Always cite the source tool for every finding (hunter_io, maigret, virustotal,\
+      \ etc.).\n- Outputs land in /opt/projects/osint/reports/. Do not write outside\
+      \ /opt/projects/osint/ unless explicitly asked.\n\nAvailable data sources (from\
+      \ .env): HUNTER_API_KEY, SHODAN_API_KEY, VIRUSTOTAL_API_KEY, GITHUB_TOKEN, ABSTRACT_API_KEY,\
+      \ CENSYS_API_KEY + CENSYS_SECRET, BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY, ABUSEIPDB_API_KEY,\
+      \ URLSCAN_API_KEY, OTX_API_KEY, DEHASHED_API_KEY, NUMVERIFY_API_KEY, IPQS_API_KEY.\n"
+    '1543950705776398378': 'You are Hermes in the research channel of the AscendAI
+      server. This channel is for ad-hoc, open-ended investigation the user wants
+      to run on various topics.
+
+
+      Project workspace: /opt/projects/research/. Read /opt/projects/research/AGENTS.md
+      at the start of every session for the canonical reference (topic subdirectory
+      layout, deliverables format, index maintenance).
+
 
       Operating principles:
-      - Never start an investigation without the user's explicit authorization in the same message. Confirm the target, the depth (1 to 3), and the format (markdown or json) before running.
-      - For authorized investigations:
-        1. cd /opt/projects/osint && source .venv/bin/activate (the OSINT venv has maigret, sherlock, h8mail, ghunt, shodan, censys, sublist3r, holehe, theHarvester, amass, subfinder, httpx, plus python deps)
-        2. python3 src/main.py --query "<entity>" [--no-cascade] [--format markdown|json]
-        3. Read the produced report from /opt/projects/osint/reports/
-        4. Post a Discord-friendly summary to this channel, optionally attach the full markdown as a file
-      - Always use the ascend web scraper (src/ascend_client.py, via $ASCEND_SCRAPPER_URL) for web scraping. Never use Playwright or Selenium in this project.
-      - For Polish targets (names, companies), pass the name as-is to the cascade engine. For Polish sole proprietors (JDG), the cascade engine extracts the person name from GitHub profile data and appends it to the company name for search (e.g. "RevDev Lukasz Sarna" not just "RevDev"). Do not pre-format that for it.
-      - The cascade engine auto-follows subject-owned connections (own emails, domains, profiles, companies) up to depth 3 with a max of 5 connections per search. It does NOT follow coworker or social-media subdomain links. Skip amass/subfinder against social media domains.
-      - Blocked services that need manual workarounds: rejestr.io (CAPTCHA), CEIDG/KRS Online (JS rendering), eKRS (CAPTCHA), LinkedIn/Twitter/X (blocks scrapers). For these, suggest the user opens the URL in their browser manually or use Maigret/Sherlock instead.
-      - Always cite the source tool for every finding (hunter_io, maigret, virustotal, etc.).
-      - Outputs land in /opt/projects/osint/reports/. Do not write outside /opt/projects/osint/ unless explicitly asked.
 
-      Available data sources (from .env): HUNTER_API_KEY, SHODAN_API_KEY, VIRUSTOTAL_API_KEY, GITHUB_TOKEN, ABSTRACT_API_KEY, CENSYS_API_KEY + CENSYS_SECRET, BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY, ABUSEIPDB_API_KEY, URLSCAN_API_KEY, OTX_API_KEY, DEHASHED_API_KEY, NUMVERIFY_API_KEY, IPQS_API_KEY.
-    '1543950705776398378': |
-      You are Hermes in the research channel of the AscendAI server. This channel is for ad-hoc, open-ended investigation the user wants to run on various topics.
+      - Each topic is its own subdirectory under /opt/projects/research/<topic-slug>/
+      with findings.md (the main deliverable) and optionally proposition.md and prototype/.
 
-      Project workspace: /opt/projects/research/. Read /opt/projects/research/AGENTS.md at the start of every session for the canonical reference (topic subdirectory layout, deliverables format, index maintenance).
+      - Maintain /opt/projects/research/README.md as the canonical index of all topics.
+      Update it at the end of every research turn.
 
-      Operating principles:
-      - Each topic is its own subdirectory under /opt/projects/research/<topic-slug>/ with findings.md (the main deliverable) and optionally proposition.md and prototype/.
-      - Maintain /opt/projects/research/README.md as the canonical index of all topics. Update it at the end of every research turn.
-      - Always cite sources (URLs, paper titles, API names). Distinguish confirmed facts, derived inferences, and speculations.
+      - Always cite sources (URLs, paper titles, API names). Distinguish confirmed
+      facts, derived inferences, and speculations.
+
       - Prefer Markdown for deliverables. Only switch format if the user asks.
-      - Do not modify code outside /opt/projects/research/ unless the user explicitly asks for cross-project work.
-      - For ad-hoc data lookups, use the env vars from .env (ALCHEMY_API_KEY, HUNTER_API_KEY, etc.) or keyless APIs (CoinGecko, etc.). For deep web research, the ascend scraper at $ASCEND_SCRAPPER_URL is preferred over plain curl.
 
-      Post a Discord-friendly summary to this channel after every research turn. Use the discord.send tool, attach findings.md as a file.
+      - Do not modify code outside /opt/projects/research/ unless the user explicitly
+      asks for cross-project work.
 
+      - For ad-hoc data lookups, use the env vars from .env (ALCHEMY_API_KEY, HUNTER_API_KEY,
+      etc.) or keyless APIs (CoinGecko, etc.). For deep web research, the ascend scraper
+      at $ASCEND_SCRAPPER_URL is preferred over plain curl.
+
+
+      Post a Discord-friendly summary to this channel after every research turn. Use
+      the discord.send tool, attach findings.md as a file.
+
+      '
   server_actions: ''
-whatsapp: {}
 telegram:
   reactions: false
-  channel_prompts: {}
-slack:
-  channel_prompts: {}
-mattermost:
-  channel_prompts: {}
 approvals:
   mode: manual
   timeout: 60
   cron_mode: deny
   mcp_reload_confirm: true
 command_allowlist: []
-quick_commands: {}
-hooks: {}
 hooks_auto_accept: false
-personalities: {}
 security:
   allow_private_urls: false
   redact_secrets: false
@@ -421,7 +493,6 @@ security:
     shared_files: []
 cron:
   wrap_response: true
-  max_parallel_jobs: null
 kanban:
   dispatch_in_gateway: true
   dispatch_interval_seconds: 60
@@ -436,8 +507,7 @@ logging:
 model_catalog:
   enabled: true
   url: https://hermes-agent.nousresearch.com/docs/api/model-catalog.json
-  ttl_hours: 24
-  providers: {}
+  ttl_hours: 1
 network:
   force_ipv4: false
 sessions:
@@ -446,11 +516,12 @@ sessions:
   vacuum_after_prune: true
   min_interval_hours: 24
 onboarding:
-  seen: {}
+  seen:
+    busy_input_prompt: true
 updates:
   pre_update_backup: false
   backup_keep: 5
-_config_version: 23
+_config_version: 39
 session_reset:
   mode: both
   idle_minutes: 1440
@@ -460,31 +531,43 @@ streaming:
   enabled: false
 platform_toolsets:
   cli:
-  - hermes-cli
+    - hermes-cli
   telegram:
-  - hermes-telegram
+    - hermes-telegram
   discord:
-  - hermes-discord
+    - hermes-discord
   whatsapp:
-  - hermes-whatsapp
+    - hermes-whatsapp
   slack:
-  - hermes-slack
+    - hermes-slack
   signal:
-  - hermes-signal
+    - hermes-signal
   homeassistant:
-  - hermes-homeassistant
+    - hermes-homeassistant
   qqbot:
-  - hermes-qqbot
+    - hermes-qqbot
   yuanbao:
-  - hermes-yuanbao
+    - hermes-yuanbao
   teams:
-  - hermes-teams
+    - hermes-teams
 
-# Fallback Model
+# ── Fallback Model ────────────────────────────────────────────────────
 # Automatic provider failover when primary is unavailable.
 # Uncomment and configure to enable. Triggers on rate limits (429),
 # overload (529), service errors (503), or connection failures.
-# See AGENTS.md for the full list of supported providers.
+#
+# Supported providers:
+#   openrouter   (OPENROUTER_API_KEY)  — routes to any model
+#   openai-codex (OAuth — hermes auth) — OpenAI Codex
+#   nous         (OAuth — hermes auth) — Nous Portal
+#   zai          (ZAI_API_KEY)         — Z.AI / GLM
+#   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
+#   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
+#   minimax      (MINIMAX_API_KEY)     — MiniMax
+#   minimax-cn   (MINIMAX_CN_API_KEY)  — MiniMax (China)
+#   bedrock      (AWS IAM / boto3)     — AWS Bedrock (Converse API)
+#
+# For custom OpenAI-compatible endpoints, add base_url and key_env.
 #
 # fallback_model:
 #   provider: openrouter

@@ -26,6 +26,12 @@ services:
       - DISCORD_AUTO_THREAD=${DISCORD_AUTO_THREAD:-false}
       - DISCORD_COMMAND_SYNC_POLICY=${DISCORD_COMMAND_SYNC_POLICY:-off}
       - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
+      # Disable hermes's write sandbox. Upstream image bakes in
+      # HERMES_WRITE_SAFE_ROOT=/opt/data, but the fork keeps its tracked source
+      # under /opt/projects/ (mounted from ./fork/projects on the host). Setting
+      # this empty disables the sandbox entirely; agent can write anywhere.
+      # - HERMES_WRITE_SAFE_ROOT=/opt/data:/opt/projects   # scoped (only these)
+      - HERMES_WRITE_SAFE_ROOT=off
 
       # On-chain
       - BLOCKSCOUT_API_KEY=${BLOCKSCOUT_API_KEY}
