@@ -8,6 +8,7 @@ Usage: python3 news_collector.py
 """
 
 import json
+import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
@@ -26,26 +27,25 @@ RSS_FEEDS = [
 def fetch_rss(url: str) -> list:
     """Fetch and parse RSS feed. Returns list of articles."""
     try:
-        import urllib.request
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=15) as resp:
             xml_data = resp.read().decode("utf-8")
-        
+
         root = ET.fromstring(xml_data)
         channel = root.find("channel")
-        
+
         articles = []
         for item in channel.findall("item")[:10]:
             title = item.findtext("title", "").strip()
             link = item.findtext("link", "").strip()
             pub_date = item.findtext("pubDate", "").strip()
             description = item.findtext("description", "").strip()
-            
+
             # Clean HTML from description
             import re
             description = re.sub(r'<[^>]+>', '', description)
             description = description.strip()
-            
+
             if title:
                 articles.append({
                     "title": title,
@@ -53,9 +53,9 @@ def fetch_rss(url: str) -> list:
                     "published": pub_date,
                     "description": description[:200] if description else "",
                 })
-        
+
         return articles
-        
+
     except Exception as e:
         print(f"[RSS] Error fetching {url}: {e}")
         return []
@@ -65,7 +65,7 @@ def fetch_all_news() -> dict:
     """Fetch from all RSS feeds."""
     all_articles = []
     errors = []
-    
+
     for feed in RSS_FEEDS:
         print(f"[News] Fetching {feed['name']}...")
         articles = fetch_rss(feed["url"])
@@ -76,7 +76,7 @@ def fetch_all_news() -> dict:
             all_articles.extend(articles)
         else:
             errors.append(f"{feed['name']} failed")
-    
+
     if not all_articles:
         return {
             "status": "error",
@@ -84,7 +84,7 @@ def fetch_all_news() -> dict:
             "articles": [],
             "source": "rss",
         }
-    
+
     # Sort by date (most recent first)
     # Note: Some dates may not parse, so we keep original order as fallback
     return {
@@ -102,20 +102,20 @@ def save_news(data: dict):
     latest_file = DATA_DIR / "news_latest.json"
     with open(latest_file, "w") as f:
         json.dump(data, f, indent=2)
-    
+
     print(f"[News] Saved {len(data.get('articles', []))} articles")
 
 
 def main():
     print("[News] Fetching crypto news from RSS feeds...")
-    
+
     result = fetch_all_news()
-    
+
     if result.get("status") == "ok":
         print(f"[News] Got {len(result.get('articles', []))} articles from {len(result.get('feeds_used', []))} feeds")
     else:
         print(f"[News] ERROR: {result.get('error', 'Unknown error')}")
-    
+
     save_news(result)
 
 

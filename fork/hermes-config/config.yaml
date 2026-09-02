@@ -481,6 +481,7 @@ approvals:
 command_allowlist: []
 hooks_auto_accept: false
 security:
+  protected_instruction_files: false,
   allow_private_urls: false
   redact_secrets: false
   tirith_enabled: true

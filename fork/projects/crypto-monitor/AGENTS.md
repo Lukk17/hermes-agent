@@ -96,13 +96,22 @@ If collectors fail with import errors, add the missing packages to `requirements
 
 The Python code in `collectors/`, `analyzers/`, `scripts/`, and `reports/` is currently in transition from OpenClaw paths to hermes paths. Before this project is fully production-ready on hermes, the following hardcoded references must be reviewed and updated by the agent:
 
-- `scripts/report_generator.py` likely references `data/<category>/` paths with OpenClaw-style absolute prefixes in some places.
 - `tools/verify_wallets.py` may reference absolute paths under `/home/node/.openclaw/`.
 - `config/settings.json` may point at an OpenClaw-specific API endpoint.
+- A handful of remaining collectors (altseason, defi_tvl, etf_flow,
+  exchange_flow_tracker, gas, funding, dominance, whale_* etc.) still
+  import `requests`/`urllib.request` directly. Migrate them to
+  `fetch_json`/`fetch_text` from `services/external.py` as you touch
+  them.
 
-Run `grep -rn '.openclaw\|/home/node' .` from the project root to find every hardcoded reference. Replace each with a path derived from `os.path.dirname(__file__)` or the project env (`CRYPTO_MONITOR_PROJECT_ROOT` if added).
+Run `grep -rn '.openclaw\|/home/node' .` from the project root to find
+every hardcoded reference. Replace each with a path derived from
+`os.path.dirname(__file__)` or imported from `src.paths`.
 
-The pipeline currently runs from the project root via `daily_report_pipeline.sh`, so most relative paths work. The grep is mostly to catch absolute paths that were left over from the OpenClaw layout.
+The pipeline currently runs from the project root via
+`daily_report_pipeline.sh`, so most relative paths work. The grep is
+mostly to catch absolute paths that were left over from the OpenClaw
+layout.
 
 ## What this project is NOT
 

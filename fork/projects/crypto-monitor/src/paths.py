@@ -27,7 +27,7 @@ ANALYZERS_DIR = PROJECT_ROOT / "analyzers"
 REPORTS_DIR_SCRIPTS = PROJECT_ROOT / "reports"
 
 # Python venv
-PYTHON_BIN = PROJECT_ROOT / "venv" / "bin" / "python"
+PYTHON_BIN = PROJECT_ROOT / ".venv" / "bin" / "python"
 
 
 # Convenience: data subdirectories

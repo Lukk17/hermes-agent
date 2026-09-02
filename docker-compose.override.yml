@@ -17,6 +17,7 @@ services:
       - ./fork/hermes-config/config.yaml:/opt/data/config.yaml
       - ./fork/hermes-config/cron/jobs.json:/opt/data/cron/jobs.json
     environment:
+      - PATH=/opt/data/.local/bin:/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin
       # Messaging
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_ALLOWED_USERS=${DISCORD_ALLOWED_USERS}

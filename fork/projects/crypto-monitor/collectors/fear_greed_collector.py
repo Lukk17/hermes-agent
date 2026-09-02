@@ -16,11 +16,12 @@ CONFIG_FILE = PROJECT_ROOT / "config" / "settings.json"
 DATA_DIR = PROJECT_ROOT / "data" / "fear_greed"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Load config
+
 def load_config() -> dict:
     if CONFIG_FILE.exists():
         return json.loads(CONFIG_FILE.read_text())
     return {}
+
 
 CONFIG = load_config()
 API_ENDPOINTS = CONFIG.get("api_endpoints", {})
@@ -29,12 +30,12 @@ API_ENDPOINTS = CONFIG.get("api_endpoints", {})
 def fetch_fear_greed() -> dict:
     """Fetch Fear & Greed index from alternative.me."""
     url = API_ENDPOINTS.get("fear_greed_limit", "https://api.alternative.me/fng/?limit=1")
-    
+
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "CryptoMonitor/1.0"})
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
-        
+
         latest = data["data"][0]
         return {
             "status": "ok",
@@ -60,19 +61,19 @@ def save(data: dict):
     latest_file = DATA_DIR / "fear_greed_latest.json"
     with open(latest_file, "w") as f:
         json.dump(data, f, indent=2)
-    
+
     # Update history
     history_file = DATA_DIR / "fear_greed_history.json"
     today = datetime.now().strftime("%Y-%m-%d")
-    
+
     if history_file.exists():
         history = json.loads(history_file.read_text())
     else:
         history = {}
-    
+
     history[today] = data
     history["last_updated"] = datetime.now().isoformat()
-    
+
     with open(history_file, "w") as f:
         json.dump(history, f, indent=2)
 

@@ -14,4 +14,6 @@ echo "Running report_generator.py..."
 $PYTHON scripts/report_generator.py
 
 echo "Step 1 complete. Report with placeholders created."
-echo "Next: hermes agent generates news_summary.md and market_summary.md, then posts via discord.send."
+echo "Next: hermes agent generates news_summary.md and market_summary.md,"
+echo "then calls services.agent_bridge.post_to_discord() to queue the report."
+echo "Host-side cron (or manual run) drains via scripts/post_to_discord.py."

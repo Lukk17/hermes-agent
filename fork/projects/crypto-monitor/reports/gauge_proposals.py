@@ -2,10 +2,13 @@
 """Style 3 refined: Horizontal bar gauge with proper anti-aliasing."""
 
 import math
+import sys
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-OUT = Path("/home/node/.openclaw/workspace/crypto-monitor/data/reports")
+# Honor the project layout via src.paths instead of a hardcoded openclaw path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from src.paths import REPORTS_DIR as OUT  # noqa: E402
 
 BG = (13, 17, 23)
 WHITE = (255, 255, 255)

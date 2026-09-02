@@ -3,12 +3,12 @@
 Generate Report JSON
 Runs all collectors, analyzers, and builds report_latest.json.
 
-Error handling: each collector runs independently - if one fails,
-it logs an error and continues. Pipeline never crashes.
+Error handling: each step runs independently - if one fails, it logs an
+error and continues. Pipeline never crashes.
 """
 
-import sys
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -56,23 +56,23 @@ def run_script(script_path, label):
 
 def main():
     report_date = datetime.utcnow().strftime("%Y-%m-%d")
-    
+
     print("=" * 50)
     print("RUNNING CRYPTO-MONITOR PIPELINE")
     print(f"Date: {report_date}")
     print("=" * 50)
-    
+
     # Initialize error collector
     from src.pipeline_errors import error_collector
     error_collector.clear()
-    
+
     # --- Collectors ---
     print("\n--- COLLECTORS ---")
-    
+
     # Prefetch CoinGecko data ONCE for all collectors
     from collectors.cache_manager import prefetch_coingecko_data
     prefetch_coingecko_data()
-    
+
     # Run ALL collectors - each handles own errors
     collectors = [
         ("collectors/coin_prices_collector.py", "💰 Coin Prices..."),
@@ -92,13 +92,13 @@ def main():
         ("collectors/defi_tvl_collector.py", "📊 DeFi TVL..."),
         ("collectors/market_breadth_collector.py", "📊 Market Breadth..."),
     ]
-    
+
     for script, label in collectors:
         run_script(PROJECT_ROOT / script, label)
-    
+
     # --- Analyzers ---
     print("\n--- ANALYZERS ---")
-    
+
     analyzers = [
         ("analyzers/cycle_analyzer.py", "📈 Cycle Analyzer..."),
         ("analyzers/sentiment.py", "💬 Sentiment Analyzer..."),
@@ -106,20 +106,20 @@ def main():
         ("analyzers/whale_signals.py", "🐋 Whale Signals..."),
         ("analyzers/airdrop_tracker.py", "🪂 Airdrop Tracker..."),
     ]
-    
+
     for script, label in analyzers:
         run_script(PROJECT_ROOT / script, label)
-    
+
     # --- Report ---
     print("\n--- REPORT ---")
-    
+
     run_script(PROJECT_ROOT / "reports/daily_report.py", "📊 Daily Report...")
-    
+
     # Save pipeline errors
     error_collector.save(report_date)
-    
+
     print("\n✅ Pipeline complete")
-    
+
     if error_collector.has_errors():
         counts = error_collector.count_by_severity()
         print(f"\n⚠️  {error_collector.count_errors()} errors during pipeline")
@@ -130,11 +130,11 @@ def main():
         print(f"   See data/reports/pipeline_errors_{report_date}.json for details")
     else:
         print("   No errors - clean run!")
-    
+
     print("\nNext steps:")
-    print("1. Agent generates news_summary.md")
-    print("2. Agent generates market_summary.md")
-    print("3. Run publish_report.py to send to Discord")
+    print("1. Agent generates news_summary.md and market_summary.md")
+    print("2. Agent calls services.agent_bridge.post_to_discord() to queue the report")
+    print("3. Host-side scripts/post_to_discord.py drains the outbox via `hermes send`")
 
 
 if __name__ == "__main__":
