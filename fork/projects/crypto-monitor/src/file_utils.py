@@ -5,9 +5,8 @@ Provides atomic JSON writes and safe JSON reads to prevent corruption.
 """
 
 import json
-import tempfile
+import os
 from pathlib import Path
-from typing import Any
 
 
 def write_json_atomic(path: Path, data: dict | list) -> None:
@@ -28,7 +27,9 @@ def write_json_atomic(path: Path, data: dict | list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix('.tmp')
     temp.write_text(json.dumps(data, indent=2))
-    temp.rename(path)
+    # os.replace overwrites an existing target on every platform.
+    # Path.rename raises FileExistsError on Windows, which broke a same-day rerun.
+    os.replace(temp, path)
 
 
 def load_json_safe(path: Path) -> dict | list | None:

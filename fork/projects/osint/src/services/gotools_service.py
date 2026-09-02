@@ -1,34 +1,29 @@
 import asyncio
 import subprocess
 import os
+import tempfile
+from pathlib import Path
+
 from src.models import ServiceResult
-
-
-BIN_DIR = "/home/node/.openclaw/workspace/osint/bin"
-VENV_PY = "/home/node/.openclaw/workspace/osint/.venv/bin/python3"
+from src.paths import VENV_PY, bin_path, scratch_file
 
 
 class GoToolsService:
 
-    def _bin_path(self, name: str) -> str:
-        path = os.path.join(BIN_DIR, name)
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Binary not found: {path}")
-        return path
-
     async def amass_passive(self, domain: str) -> ServiceResult:
         try:
+            out_path = scratch_file("amass_out.txt")
             loop = asyncio.get_running_loop()
             def run():
                 result = subprocess.run(
-                    [self._bin_path("amass"), "enum", "-passive", "-silent",
-                     "-d", domain, "-o", "/tmp/amass_out.txt"],
+                    [str(bin_path("amass")), "enum", "-passive", "-silent",
+                     "-d", domain, "-o", str(out_path)],
                     capture_output=True,
                     text=True,
                     timeout=15,
                 )
                 try:
-                    with open("/tmp/amass_out.txt") as f:
+                    with open(out_path) as f:
                         subdomains = [l.strip() for l in f if l.strip()]
                 except FileNotFoundError:
                     subdomains = [l.strip() for l in result.stdout.split("\n") if l.strip()]
@@ -42,17 +37,18 @@ class GoToolsService:
 
     async def subfinder(self, domain: str) -> ServiceResult:
         try:
+            out_path = scratch_file("sf_out.txt")
             loop = asyncio.get_running_loop()
             def run():
                 result = subprocess.run(
-                    [self._bin_path("subfinder"), "-d", domain, "-silent",
-                     "-sources", "publicwww", "-o", "/tmp/sf_out.txt"],
+                    [str(bin_path("subfinder")), "-d", domain, "-silent",
+                     "-sources", "publicwww", "-o", str(out_path)],
                     capture_output=True,
                     text=True,
                     timeout=20,
                 )
                 try:
-                    with open("/tmp/sf_out.txt") as f:
+                    with open(out_path) as f:
                         subdomains = [l.strip() for l in f if l.strip()]
                 except FileNotFoundError:
                     subdomains = [l.strip() for l in result.stdout.split("\n") if l.strip()]
@@ -66,18 +62,19 @@ class GoToolsService:
 
     async def dnsrecon_enum(self, domain: str) -> ServiceResult:
         try:
+            out_path = scratch_file("dnsrecon_out.json")
             loop = asyncio.get_running_loop()
             def run():
                 import json
                 result = subprocess.run(
-                    [VENV_PY, "-m", "dnsrecon",
-                     "-d", domain, "-j", "/tmp/dnsrecon_out.json"],
+                    [str(VENV_PY), "-m", "dnsrecon",
+                     "-d", domain, "-j", str(out_path)],
                     capture_output=True,
                     text=True,
                     timeout=30,
                 )
                 try:
-                    with open("/tmp/dnsrecon_out.json") as f:
+                    with open(out_path) as f:
                         raw = json.load(f)
                 except (FileNotFoundError, json.JSONDecodeError):
                     raw = result.stdout[:2000]
@@ -113,13 +110,14 @@ class GoToolsService:
         if not hosts:
             return ServiceResult(source="httpx", success=True, data={"probed": []})
         try:
+            hosts_path = scratch_file("httpx_hosts.txt")
             loop = asyncio.get_running_loop()
             def run():
-                with open("/tmp/httpx_hosts.txt", "w") as f:
+                with open(hosts_path, "w") as f:
                     for h in hosts:
                         f.write(h + "\n")
                 result = subprocess.run(
-                    [self._bin_path("httpx"), "-list", "/tmp/httpx_hosts.txt",
+                    [str(bin_path("httpx")), "-list", str(hosts_path),
                      "-silent", "-status-code"],
                     capture_output=True,
                     text=True,
@@ -139,7 +137,7 @@ class GoToolsService:
             loop = asyncio.get_running_loop()
             def run():
                 result = subprocess.run(
-                    [self._bin_path("naabu"), "-host", host, "-silent", "-rate", "100"],
+                    [str(bin_path("naabu")), "-host", host, "-silent", "-rate", "100"],
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -166,16 +164,17 @@ emailfetcher_api_key: ""
 freekey: ""
 docker: false
 """
-                with open("/tmp/.mosint.yaml", "w") as f:
-                    f.write(config_content)
-                result = subprocess.run(
-                    [self._bin_path("mosint"), email, "-s", "-o", "/tmp/mosint_out.json"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                    env={**os.environ, "HOME": "/tmp"},
-                )
-                return {"stdout": result.stdout[:2000], "stderr": result.stderr[:500], "rc": result.returncode}
+                with tempfile.TemporaryDirectory() as mosint_home:
+                    # mosint loads its config from $HOME/.mosint.yaml, so HOME must be a directory we own
+                    Path(mosint_home, ".mosint.yaml").write_text(config_content)
+                    result = subprocess.run(
+                        [str(bin_path("mosint")), email, "-s", "-o", str(Path(mosint_home, "mosint_out.json"))],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        env={**os.environ, "HOME": mosint_home},
+                    )
+                    return {"stdout": result.stdout[:2000], "stderr": result.stderr[:500], "rc": result.returncode}
             data = await loop.run_in_executor(None, run)
             return ServiceResult(source="mosint", success=True, data=data)
         except asyncio.TimeoutError:

@@ -1,6 +1,6 @@
-from src.services.base_service import BaseService
+from src.services.base_service import BaseService, raise_if_intervention
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.ascend_client import HumanInterventionNeeded, ascend_client
 import asyncio
 
 
@@ -54,6 +54,8 @@ class CompanyService(BaseService):
             except Exception:
                 pass
             return ServiceResult(source="ceidg", success=True, data={"parsed": parsed, "raw_snippet": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="ceidg", success=False, error=str(e))
 
@@ -93,6 +95,8 @@ class CompanyService(BaseService):
             result = await ascend_client.scrape(ekrs_url)
             content = result.get("content", "")
             return ServiceResult(source="ekrs", success=True, data={"raw_snippet": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="ekrs", success=False, error=str(e))
 
@@ -102,6 +106,8 @@ class CompanyService(BaseService):
             result = await ascend_client.scrape(vat_url)
             content = result.get("content", "")
             return ServiceResult(source="vat_registry", success=True, data={"raw_snippet": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="vat_registry", success=False, error=str(e))
 
@@ -167,18 +173,22 @@ class CompanyService(BaseService):
             return ServiceResult(source="vies_vat", success=False, error=str(e))
 
     async def search_by_nip(self, nip: str) -> list[ServiceResult]:
-        return await asyncio.gather(
+        results = await asyncio.gather(
             self.scrape_ceidg(nip),
             self.scrape_vat_registry(nip),
             return_exceptions=True,
         )
+        raise_if_intervention(results)
+        return results
 
     async def search_by_krs(self, krs: str) -> list[ServiceResult]:
-        return await asyncio.gather(
+        results = await asyncio.gather(
             self.search_ekrs_json(krs),
             self.scrape_ekrs(krs),
             return_exceptions=True,
         )
+        raise_if_intervention(results)
+        return results
 
     async def search_by_company_name(self, name: str) -> list[ServiceResult]:
         # Import here to avoid circular dependency

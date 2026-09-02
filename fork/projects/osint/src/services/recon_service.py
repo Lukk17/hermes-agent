@@ -1,9 +1,7 @@
-import sys
-import os
 import asyncio
 from src.services.base_service import BaseService
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.paths import THEHARVESTER_BIN, THEHARVESTER_DIR, VENV_PY, scratch_file
 
 
 class ReconService(BaseService):
@@ -24,16 +22,13 @@ class ReconService(BaseService):
     async def sublist3r_enum(self, domain: str) -> ServiceResult:
         try:
             import concurrent.futures
+            out_path = scratch_file("sublist3r.txt")
             loop = asyncio.get_running_loop()
 
             def run_sync():
                 import subprocess
-                import shlex
-                venv_py = "/home/node/.openclaw/workspace/osint/.venv/bin/python3"
-                cmd = f"{venv_py} -m sublist3r -d {domain} -o /tmp/sublist3r_{os.getpid()}.txt"
                 proc = subprocess.Popen(
-                    cmd,
-                    shell=True,
+                    [str(VENV_PY), "-m", "sublist3r", "-d", domain, "-o", str(out_path)],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
@@ -46,7 +41,7 @@ class ReconService(BaseService):
                     proc.kill()
                     proc.wait()
                 try:
-                    with open(f"/tmp/sublist3r_{os.getpid()}.txt") as f:
+                    with open(out_path) as f:
                         return [line.strip() for line in f if line.strip()]
                 except FileNotFoundError:
                     return []
@@ -55,8 +50,6 @@ class ReconService(BaseService):
             return ServiceResult(source="sublist3r", success=True, data={"subdomains": subdomains})
         except asyncio.TimeoutError:
             return ServiceResult(source="sublist3r", success=False, error="Timeout after 15s")
-        except Exception as e:
-            return ServiceResult(source="sublist3r", success=False, error=str(e))
         except Exception as e:
             return ServiceResult(source="sublist3r", success=False, error=str(e))
 
@@ -96,19 +89,20 @@ class ReconService(BaseService):
 
     async def theharvester_search(self, domain: str) -> ServiceResult:
         try:
+            out_path = scratch_file("th_out.json")
             loop = asyncio.get_running_loop()
             def run_sync():
                 import subprocess
                 import os
                 env = os.environ.copy()
-                env['PYTHONPATH'] = '/home/node/.openclaw/workspace/osint/theHarvester'
+                env['PYTHONPATH'] = str(THEHARVESTER_DIR)
                 result = subprocess.run(
                     [
-                        '/home/node/.openclaw/workspace/osint/.venv/bin/python3',
-                        '/home/node/.openclaw/workspace/osint/theHarvester/bin/theHarvester',
+                        str(VENV_PY),
+                        str(THEHARVESTER_BIN),
                         '-d', domain,
                         '-b', 'google,bing',
-                        '-f', '/tmp/th_out.json',
+                        '-f', str(out_path),
                     ],
                     capture_output=True,
                     text=True,
@@ -119,7 +113,7 @@ class ReconService(BaseService):
             output = await loop.run_in_executor(None, run_sync)
             try:
                 import json
-                with open("/tmp/th_out.json") as f:
+                with open(out_path) as f:
                     data = json.load(f)
                 return ServiceResult(source="theharvester", success=True, data=data)
             except Exception:

@@ -4,16 +4,18 @@ This fork's approach: don't expose the dashboard. Publish it only to `127.0.0.1:
 
 ### Network layout
 
-| Service | Host port publish | Internal port | Who can reach it |
+| Service | Network mode | Listener | Who can reach it |
 |---|---|---|---|
-| gateway | none (outbound-only) | n/a | nobody — outbound only |
-| dashboard | `127.0.0.1:9119:9119` | 9119 | the host's loopback only |
+| gateway | `network_mode: host` | none (outbound-only) | nobody — outbound only |
+| dashboard | `network_mode: host` | `127.0.0.1:9119` | the host's loopback only |
 
-The dashboard binds `0.0.0.0` *inside* the container (required by Docker networking), but Docker's port-publish binding `127.0.0.1:9119:9119` restricts external reachability to the host's loopback. Nothing on the LAN can reach the dashboard.
+Both services run with `network_mode: host`, so they share the host's network namespace and there is no port publish to configure. The dashboard's own command binds `127.0.0.1` (`["dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open"]` in `docker-compose.override.yml`), and that bind IS the security boundary. Nothing on the LAN can reach the dashboard.
 
-### About the `--insecure` flag
+### There is no `--insecure` flag
 
-The dashboard command includes `--insecure`. Hermes' own bind-safety check refuses any non-loopback bind without this flag, and inside the container the dashboard must bind `0.0.0.0` for Docker port publishing to work. The flag silences that check; it does **not** widen the attack surface in this configuration because Docker's publish binding is what actually decides who can reach the port. With `127.0.0.1:9119:9119`, only the host's loopback gets through.
+Do not add one. `--insecure` is still accepted by `hermes dashboard` and `hermes serve` but it is a documented no-op (`hermes_cli/subcommands/dashboard.py:32-41`): since the June 2026 hardening it no longer disables authentication, and a public bind always requires an auth provider. The dashboard command in `docker-compose.override.yml` is `["dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open"]`, so it binds loopback directly and never trips the bind-safety check.
+
+The same applies to `--tui`. It is accepted and silently ignored (`hermes_cli/subcommands/dashboard.py:110-124`), a backward-compatibility shim for old desktop-app shells. The embedded chat surface is always on; passing the flag changes nothing.
 
 ### Local access (same machine as Docker)
 

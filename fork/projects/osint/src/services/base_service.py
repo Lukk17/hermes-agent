@@ -1,10 +1,24 @@
 import asyncio
 import requests
 import os
+from collections.abc import Iterable
+
+from src.ascend_client import HumanInterventionNeeded
 
 
 def get_env(key: str) -> str | None:
     return os.environ.get(key)
+
+
+def raise_if_intervention(results: Iterable[object]) -> None:
+    """Re-raise the captcha wall that `asyncio.gather(return_exceptions=True)` turned into a result.
+
+    Raises:
+        HumanInterventionNeeded: when any gathered coroutine hit a captcha wall.
+    """
+    for result in results:
+        if isinstance(result, HumanInterventionNeeded):
+            raise result
 
 
 class BaseService:

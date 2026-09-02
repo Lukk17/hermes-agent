@@ -1,7 +1,7 @@
 from src.services.base_service import BaseService
 from src.models import ServiceResult
+from src.paths import LEAKS_DIR, VENV_PY, scratch_file
 import asyncio
-import os
 import subprocess
 
 
@@ -106,17 +106,18 @@ class BreachService(BaseService):
 
     async def check_h8mail(self, email: str) -> ServiceResult:
         try:
+            out_path = scratch_file("h8mail_out.json")
             loop = asyncio.get_running_loop()
             def run_sync():
                 result = subprocess.run(
-                    ["/home/node/.openclaw/workspace/osint/.venv/bin/python3", "-m", "h8mail", "-t", email, "-o", "/tmp/h8mail_out.json"],
+                    [str(VENV_PY), "-m", "h8mail", "-t", email, "-o", str(out_path)],
                     capture_output=True,
                     text=True,
                     timeout=30,
                 )
                 try:
                     import json
-                    with open("/tmp/h8mail_out.json") as f:
+                    with open(out_path) as f:
                         return json.load(f)
                 except Exception:
                     return {"raw": result.stdout + result.stderr}
@@ -130,7 +131,7 @@ class BreachService(BaseService):
             loop = asyncio.get_running_loop()
             def run_sync():
                 result = subprocess.run(
-                    ["/home/node/.openclaw/workspace/osint/.venv/bin/python3", "-m", "holehe", email, "--only-used", "-NP", "-T", "5"],
+                    [str(VENV_PY), "-m", "holehe", email, "--only-used", "-NP", "-T", "5"],
                     capture_output=True,
                     text=True,
                     timeout=15,
@@ -188,11 +189,10 @@ class BreachService(BaseService):
 
     async def search_local_db(self, email: str) -> ServiceResult:
         try:
-            leaks_dir = "/home/node/.openclaw/workspace/osint/data/leaks"
-            if not os.path.isdir(leaks_dir):
+            if not LEAKS_DIR.is_dir():
                 return ServiceResult(source="local_leak_db", success=True, data={"found": False, "reason": "No data/leaks directory"})
             result = subprocess.run(
-                ["grep", "-r", email, leaks_dir],
+                ["grep", "-r", email, str(LEAKS_DIR)],
                 capture_output=True,
                 text=True,
                 timeout=30,

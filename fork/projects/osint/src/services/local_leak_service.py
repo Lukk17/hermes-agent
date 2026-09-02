@@ -1,18 +1,17 @@
 from src.services.base_service import BaseService
 from src.models import ServiceResult
+from src.paths import LEAKS_DIR
 import subprocess
-import os
 
 
 class LocalLeakService(BaseService):
-    LEAKS_DIR = "/home/node/.openclaw/workspace/osint/data/leaks"
 
     def _search_grep(self, query: str, max_results: int = 100) -> list[str]:
-        if not os.path.isdir(self.LEAKS_DIR):
+        if not LEAKS_DIR.is_dir():
             return []
         try:
             result = subprocess.run(
-                ["grep", "-r", "-i", query, self.LEAKS_DIR],
+                ["grep", "-r", "-i", "-F", query, str(LEAKS_DIR)],
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -25,11 +24,11 @@ class LocalLeakService(BaseService):
             return []
 
     def _search_hash(self, hash_value: str, max_results: int = 50) -> list[str]:
-        if not os.path.isdir(self.LEAKS_DIR):
+        if not LEAKS_DIR.is_dir():
             return []
         try:
             result = subprocess.run(
-                ["grep", "-r", "-F", hash_value, self.LEAKS_DIR],
+                ["grep", "-r", "-F", hash_value, str(LEAKS_DIR)],
                 capture_output=True,
                 text=True,
                 timeout=60,

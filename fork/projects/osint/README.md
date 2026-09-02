@@ -8,28 +8,42 @@ Tested subject: **Łukasz Sarna** (Warsaw, Java Developer, RevDev JDG owner)
 
 ## Quick Start
 
+The project venv is gitignored and is NOT in the image. Build it once per
+machine, then call its interpreter directly. Do not `source
+.venv/bin/activate`: every tool call is its own shell, so the activation is
+gone by the next command.
+
 ```bash
-cd /home/node/.openclaw/workspace/osint
+cd /opt/projects/osint
+```
 
-# Activate Python 3.12 venv (REQUIRED)
-source .venv/bin/activate
+Build the venv if `.venv/` is missing:
 
+```bash
+uv venv .venv --python python3.12 && uv pip install --python ./.venv/bin/python -e .
+```
+
+Then:
+
+```bash
 # Cascade mode (auto-follows connections up to depth 3)
-python3 src/main.py --query "Łukasz Sarna" --format markdown
+./.venv/bin/python src/main.py --query "Łukasz Sarna" --format markdown
 
 # One-shot mode (no cascade)
-python3 src/main.py --query "Łukasz Sarna" --no-cascade
+./.venv/bin/python src/main.py --query "Łukasz Sarna" --no-cascade
+
+# Resume a run that paused for a CAPTCHA
+./.venv/bin/python src/main.py --resume <resume_token>
 
 # Specific types
-python3 src/main.py --query "email:target@gmail.com"
-python3 src/main.py --query "NIP:5261040828"
-python3 src/main.py --query "KRS:0000123456"
-python3 src/main.py --query "domain:example.com"
-python3 src/main.py --query "linkedin:https://linkedin.com/in/target"
+./.venv/bin/python src/main.py --query "email:target@gmail.com"
+./.venv/bin/python src/main.py --query "NIP:5261040828"
+./.venv/bin/python src/main.py --query "KRS:0000123456"
+./.venv/bin/python src/main.py --query "domain:example.com"
+./.venv/bin/python src/main.py --query "linkedin:https://linkedin.com/in/target"
 
 # Output formats
-python3 src/main.py --query "Łukasz Sarna" --format markdown
-python3 src/main.py --query "Łukasz Sarna" --format json
+./.venv/bin/python src/main.py --query "Łukasz Sarna" --format json
 ```
 
 ---
@@ -139,7 +153,7 @@ osint/
 │   ├── models.py            — Data models
 │   ├── cascade_engine.py    — Cascade search engine (auto-follow connections)
 │   ├── connections.py       — Connection type definitions
-│   ├── ascend_client.py     — Web scraper (ascend service, host.docker.internal:7021)
+│   ├── ascend_client.py     — Web scraper (ascend service, $ASCEND_SCRAPPER_URL)
 │   ├── report_renderer.py   — Markdown/JSON output
 │   └── services/
 │       ├── base_service.py   — Shared async HTTP
@@ -170,32 +184,46 @@ osint/
 
 ## Environment Variables (API Keys)
 
-Copy `.env.example` to `.env` and fill in keys. Keys are loaded from the host machine's environment (not from a workspace .env file).
+NEVER create a `.env` in this directory. Keys arrive in the container's process
+environment: the gitignored repo-root `.env` on the host feeds
+`docker-compose.override.yml`, which passes each key through under
+`gateway.environment:`. The code reads them with `os.getenv("KEY")`.
+`.env.example` here is a reference list of key names, nothing more.
 
-```bash
-# Most important keys
-HUNTER_API_KEY=        # hunter.io (domain → email search)
-SHODAN_API_KEY=        # shodan.io (infra, IP)
-VIRUSTOTAL_API_KEY=    # virustotal.com (domains, IPs)
-GITHUB_TOKEN=          # github.com (rate limit boost)
-ABSTRACT_API_KEY=      # abstractapi.com (email verification)
-CENSYS_API_KEY=        # censys.io (SSL certificates)
-CENSYS_SECRET=         # censys.io secret
-BREACHDIRECTORY_API_KEY= # breachdirectory.com (breaches)
-ABUSEIPDB_API_KEY=     # abuseipdb.com (IP reputation)
-URLSCANALYTICS_API_KEY= # urlscan.io (domain analysis)
-OTX_API_KEY=           # alienvault.com (threat intel)
-DEHASHED_API_KEY=      # dehashed.com (breach search)
-OPENCORPORATES_API_KEY= # opencorporates.com (company search, no free tier)
-COMPANIES_HOUSE_API_KEY= # companieshouse.gov.uk (UK companies)
-NUMVERIFY_API_KEY=     # numverify.com (phone validation)
-IPQS_API_KEY=          # ipqualityscore.com (phone/email)
+Key names the code actually reads:
+
 ```
+HUNTER_API_KEY           # hunter.io (domain → email search)
+SHODAN_API_KEY           # shodan.io (infra, IP)
+VIRUSTOTAL_API_KEY       # virustotal.com (domains, IPs)
+GITHUB_TOKEN             # github.com (rate limit boost)
+ABSTRACT_API_KEY         # abstractapi.com (email + phone verification)
+CENSYS_API_KEY           # censys.io (SSL certificates)
+BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY  # breachdirectory.org via RapidAPI
+ABUSEIPDB_API_KEY        # abuseipdb.com (IP reputation)
+URLSCAN_API_KEY          # urlscan.io (domain analysis)
+OTX_API_KEY              # alienvault.com (threat intel)
+DEHASHED_API_KEY         # dehashed.com (breach search)
+OPENCORPORATES_API_KEY   # opencorporates.com (company search, no free tier)
+COMPANIES_HOUSE_API_KEY  # companieshouse.gov.uk (UK companies)
+NUMVERIFY_API_KEY        # numverify.com (phone validation)
+IPQS_API_KEY             # ipqualityscore.com (phone/email)
+```
+
+Of those, the override currently passes through `HUNTER_API_KEY`,
+`ABSTRACT_API_KEY`, `EMAILREP_API_KEY`, `NUMVERIFY_API_KEY`,
+`VIRUSTOTAL_API_KEY`, `URLSCAN_API_KEY`, `OTX_API_KEY`, `ABUSEIPDB_API_KEY`,
+`CENSYS_API_KEY`, `IPQS_API_KEY`, `DEHASHED_API_KEY` and
+`BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY`. The rest are unset in the container and
+their services are skipped.
+
+There is no `CENSYS_SECRET`. `infra_service.py` authenticates with
+`CENSYS_API_KEY` alone.
 
 ### Check which keys are set
 
 ```bash
-env | grep -E "HUNTER|SHODAN|VIRUSTOTAL|GITHUB|ABSTRACT|CENSYS|BREACH|ABUSE|URLSCAN|OTX|DEHASHED|OPENCORP|COMPANIES|NUMVERIFY|IPQS" | grep -v "PASSWORD\|SECRET" | sed 's/=.*/=<SET>/'
+env | grep -E "HUNTER|SHODAN|VIRUSTOTAL|GITHUB|ABSTRACT|CENSYS|BREACH|ABUSE|URLSCAN|OTX|DEHASHED|OPENCORP|COMPANIES|NUMVERIFY|IPQS" | sed 's/=.*/=<SET>/'
 ```
 
 ---
@@ -293,15 +321,27 @@ When a GitHub profile contains a company field, the cascade engine:
 ## System Dependencies
 
 ### Python 3.12
-Installed via pyenv at `/opt/pyenv/versions/3.12.13/bin/python3.12`
+Provided by pyenv inside the container (`PYENV_ROOT=/opt/pyenv`, on `PATH` via
+`/opt/pyenv/shims`). The Dockerfile installs the latest 3.11 and 3.12 patch
+releases, so do not hardcode a patch number. Build this project's venv against
+3.12: `uv venv .venv --python python3.12`.
 
 ### Ascend Web Scraper (PRIMARY SCRAPING TOOL)
 
-Runs at `http://host.docker.internal:7021/api/v2/web/read`. All web scraping uses `src/ascend_client.py`.
+`src/ascend_client.py` reads the base URL from the `ASCEND_SCRAPPER_URL`
+environment variable and falls back to `http://host.docker.internal:7021` when
+it is unset. The endpoint it calls is `<base>/api/v2/web/read`. All web
+scraping goes through this client.
 
 Never use Playwright or Selenium for scraping in this project - always use ascend_client.
 
-If ascend scraper returns `human_intervention_required`, a CAPTCHA or VNC verification is needed. Visit the provided URL to resolve.
+If the scraper hits a CAPTCHA or login wall, `src/main.py` exits **3** and prints a `human_intervention_required` JSON record to stdout with `vnc_url` and `resume_token`. Open the `vnc_url`, solve it, then continue the same run:
+
+```bash
+./.venv/bin/python src/main.py --resume <resume_token>
+```
+
+The partial results are persisted, so this resumes rather than restarts.
 
 ### Go Tools
 
@@ -320,10 +360,11 @@ mosint              # Email OSINT
 
 ### "Command not found" errors
 ```bash
-# Verify Python 3.12 venv is activated
-source .venv/bin/activate
-python3 --version  # Should be 3.12.13
+./.venv/bin/python --version
 ```
+
+Expect a 3.12 build. If the venv is missing, rebuild it with the Quick Start
+commands above.
 
 ### "API key not set" warnings
 These are expected if keys aren't configured. Services using those keys will be skipped.

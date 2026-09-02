@@ -1,15 +1,18 @@
 # Free Services with API Access
 
-Services that have a free tier or free API key registration. Create accounts and add keys to `.env` for use by the OSINT runner.
+Services that have a free tier or free API key registration.
 
 ## Setup
 
-```bash
-cp .env.example .env
-# Add your API keys below
-```
+Never create a `.env` in this project. Add the key to the gitignored `.env` at
+the repo root ON THE HOST, then add a matching `- KEY=${KEY}` line under
+`gateway.environment:` in `docker-compose.override.yml`, then recreate the
+gateway. Both are user actions. The code reads the value with
+`os.getenv("KEY")`.
 
-## Environment Variables Template
+## Environment Variables Reference
+
+The block below is a reference list of key names, not a file to create.
 
 ```bash
 # ===== Email Discovery & Validation =====

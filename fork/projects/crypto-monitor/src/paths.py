@@ -8,7 +8,7 @@ using hardcoded paths or calculating relative paths repeatedly.
 from pathlib import Path
 
 # Project root (parent of src/)
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Data directories
 DATA_DIR = PROJECT_ROOT / "data"

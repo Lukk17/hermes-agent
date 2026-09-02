@@ -19,15 +19,26 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 ├── Dockerfile.fork                    # fork-only chown fix for the dashboard TUI build
 ├── .gitignore                         # fork additions on top of upstream's
 │
-├── hermes-agent/                      # upstream Python source (NOT modified by the fork)
+│   # The repository root IS the hermes-agent checkout. There is no
+│   # hermes-agent/ subdirectory. Everything below is upstream source.
+├── run_agent.py cli.py model_tools.py toolsets.py utils.py
+│                                      #   ... and every other top-level *.py
+├── agent/                             # upstream agent internals
 ├── gateway/                           # upstream gateway source
 ├── tools/                             # upstream tool source
 ├── skills/                            # upstream bundled skills (read-only mount source)
+├── optional-skills/                   # upstream optional skills
+├── plugins/                           # upstream plugin tree
+├── providers/                         # upstream provider profiles
 ├── web/                               # upstream web UI source
 ├── ui-tui/                            # upstream TUI source
+├── tui_gateway/                       # upstream TUI backend
+├── apps/                              # upstream desktop app
 ├── acp_adapter/                       # upstream ACP adapter source
 ├── cron/                              # upstream cron subsystem source
 ├── hermes_cli/                        # upstream CLI source
+├── scripts/ tests/ tests-js/ website/ docs/ evals/ native/ nix/ locales/
+│                                      # upstream, all of it
 │
 ├── fork/                              # everything fork-specific lives here
 │   ├── AGENTS.md                      # this file (coding agent guide for the fork overlay)
@@ -41,7 +52,6 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 │   │   ├── SOUL.md                    # agent persona
 │   │   ├── config.yaml                # runtime config
 │   │   └── cron/jobs.json             # scheduled jobs
-│   ├── claw-import/                   # (gitignored) reference files copied from OpenClaw for review
 │   └── NOTE-*.md                      # fork docs
 │
 ├── hermes-data/                       # runtime state ONLY (gitignored)
@@ -60,7 +70,7 @@ The fork overlay is everything under `fork/`, `Dockerfile.fork`, `docker-compose
 
 ## Engineering principles for the fork
 
-These apply to every code change the fork makes. They come from `fork/claw-import/CLAUDE.md` and the upstream `AGENTS.md`. Treat them as non-negotiable.
+These apply to every code change the fork makes. They restate the user's global engineering rules alongside the upstream `AGENTS.md`. Treat them as non-negotiable.
 
 - **SOLID** (Single responsibility, Open/closed, Liskov, Interface segregation, Dependency inversion). One reason to change per module. Add behavior by extending, not by editing working code. Subtypes work anywhere their base type is expected. Many small focused interfaces. Depend on abstractions.
 - **DRY**. Every piece of knowledge has one source of truth. No copy-and-paste programming. If we find ourselves duplicating, extract.
@@ -119,7 +129,8 @@ Hermes uses cron (`fork/hermes-config/cron/jobs.json`), NOT heartbeat. Do not in
 ### What NOT to edit
 
 - `AGENTS.md` at repo root: upstream hermes-agent guide. Do not modify.
-- `hermes-agent/`, `gateway/`, `tools/`, `skills/` (the upstream version), `web/`, `ui-tui/`, `acp_adapter/`, `cron/` (the upstream version), `hermes_cli/`: upstream code. Rebase onto upstream merges the changes; we do not patch these in place unless the fork is the only way.
+- Everything at the repository root that is not fork-owned is upstream code, because the repository root IS the hermes-agent checkout. There is no `hermes-agent/` subdirectory to fence off. Concretely, do not patch: every top-level `*.py` (`run_agent.py`, `cli.py`, `model_tools.py`, `toolsets.py`, `hermes_constants.py`, `hermes_state*.py`, `utils.py`, `batch_runner.py`, `mcp_serve.py`, `setup.py`, and the rest), nor `agent/`, `gateway/`, `tools/`, `hermes_cli/`, `cron/`, `tui_gateway/`, `acp_adapter/`, `plugins/`, `providers/`, `skills/`, `optional-skills/`, `optional-mcps/`, `web/`, `ui-tui/`, `apps/`, `website/`, `docs/`, `scripts/`, `tests/`, `tests-js/`, `evals/`, `native/`, `nix/`, `locales/`, `docker/`, `assets/`, `contributors/`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `uv.lock`. Rebasing onto upstream merges their changes; we do not patch them in place unless the fork is the only way.
+- Fork-owned, and therefore editable: `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, the fork's additions to `.gitignore`, `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`, `FORK.md`, and the gitignored `hermes-data/` runtime state.
 - Anything inside `hermes-data/` runtime state: that is bind-mounted from the host for hermes runtime. Runtime data lives there. The tracked files that USED to be in hermes-data/ are now in `fork/hermes-config/` and bind-mounted into the container at the same paths.
 - `hermes-data/state.db*`: SQLite session files. Never commit.
 - `hermes-data/auth.json`: OAuth tokens. Never commit.

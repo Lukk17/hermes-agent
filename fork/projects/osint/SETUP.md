@@ -8,111 +8,100 @@ This project uses a layered approach:
 ## Quick Install
 
 ```bash
-cd /home/node/.openclaw/workspace/osint
+cd /opt/projects/osint
+
+# Build the venv once per machine (it is gitignored and not in the image)
+uv venv .venv --python python3.12
 
 # Install Python dependencies from pyproject.toml
-.venv/bin/pip install -e .
-
-# Or use the lock file approach
-pip install pip-tools
-pip-compile pyproject.toml
-pip-sync
+uv pip install --python ./.venv/bin/python -e .
 ```
 
-## Manual Installs (Required — Not on PyPI)
+Invoke the venv interpreter directly (`./.venv/bin/python`). Do not rely on
+`source .venv/bin/activate`: each tool call is its own shell, so the
+activation does not survive to the next command.
+
+## Tools not on PyPI
+
+Both are ALREADY vendored in this repo. Nothing to clone.
 
 ### theHarvester
-Email enumeration from 50+ sources (Google, Bing, LinkedIn, etc.)
+Email enumeration from 50+ sources. Vendored at `theHarvester/` (project root,
+not under `src/`). It carries its own `pyproject.toml`; run it with the project
+venv and its own directory on `PYTHONPATH`:
+
 ```bash
-git clone https://github.com/laramies/theHarvester.git
-cd theHarvester
-pip install -r requirements.txt
-python theHarvester.py --help
+PYTHONPATH=/opt/projects/osint/theHarvester /opt/projects/osint/.venv/bin/python /opt/projects/osint/theHarvester/bin/theHarvester --help
 ```
-Location in project: `./theHarvester/`
 
 ### OWASP Amass
-Comprehensive subdomain enumeration (active + passive)
-```bash
-git clone https://github.com/OWASP/Amass.git
-cd Amass
-# Requires Go to build: https://go.dev/doc/install
-go build ./...
-# Binary: ./amass
-```
-Location in project: `./Amass/`
-
-### Metagoofil (Optional/Old)
-Document metadata extractor
-```bash
-git clone https://github.com/opsdisk/metagoofil.git
-cd metagoofil
-pip install -r requirements.txt
-python metagoofil.py --help
-```
-
-## System-Level Tools (Recommended)
+Subdomain enumeration. The Go source is vendored at `Amass/`, and a compiled
+binary ships in `bin/`:
 
 ```bash
-# Install via apt (Debian/Ubuntu/WSL)
-sudo apt install golang-go    # For Amass build
-sudo apt install tor          # For dark web
-sudo apt install nmap         # For port scanning
-sudo apt install masscan      # For fast port scanning
-sudo apt install theHarvester  # Sometimes available via apt
-sudo apt install recon-ng     # Recon framework (if available)
-
-# For WSL2 with Kali/Parrot
-# Add Kali repo and: sudo apt install amass theharvester recon-ng
+/opt/projects/osint/bin/amass -help
 ```
 
-## API Keys to Collect
+### Metagoofil
+Not vendored and not currently used. Skip it.
 
-Copy `.env.example` from `free_with_api.md` and fill in:
+## System-Level Tools
+
+System packages come from `Dockerfile.fork`, which already installs the OSINT
+apt dependencies (libxml2, libxslt, libpcap, nmap, masscan, tor, golang-go and
+the rest). Do NOT `sudo apt install` inside the container: it runs as an
+unprivileged user and anything installed at runtime is lost on the next
+recreate. A missing package is a `Dockerfile.fork` change plus a rebuild, and
+both are user actions.
+
+Check what is present:
 
 ```bash
-# Create .env file
-cat > /home/node/.openclaw/workspace/osint/.env << 'EOF'
-# Email Discovery & Validation
-HUNTER_API_KEY=
-HIBP_API_KEY=
-EMAIL_HIPPO_API_KEY=
-ABSTRACT_EMAIL_API_KEY=
-ZEROBOUNCE_API_KEY=
-
-# Phone Validation
-NUMVERIFY_API_KEY=
-ABSTRACT_PHONE_API_KEY=
-
-# People Search
-SNOV_API_KEY=
-CLEARBIT_API_KEY=
-FULLCONTACT_API_KEY=
-
-# Infrastructure
-SHODAN_API_KEY=
-SECURITYTRAILS_API_KEY=
-WHOISXML_API_KEY=
-VIRUSTOTAL_API_KEY=
-URLSCAN_API_KEY=
-OTX_API_KEY=
-GREYNOISE_API_KEY=
-ABUSEIPDB_API_KEY=
-RISKIQ_API_KEY=
-BINARY_EDGE_API_KEY=
-CENSYS_API_KEY=
-
-# Breach Data
-LEAKCHECK_API_KEY=
-DEHASHED_API_KEY=
-SNUSBASE_API_KEY=
-BREACHDIRECTORY_API_KEY=
-
-# Code Search
-GITHUB_TOKEN=
-GREP_APP_API_KEY=
-EOF
+which tor nmap masscan go
 ```
+
+## API Keys
+
+There is NO `.env` file in this project and there must never be one. Anything
+under `/opt/projects/` is reachable by every skill, subagent and sandbox, so a
+key written there leaks across contexts.
+
+Keys reach the code through the container's process environment:
+
+1. The value is written to the gitignored `.env` at the repo root ON THE HOST.
+2. `docker-compose.override.yml` passes it through under `gateway.environment:`
+   as `- KEY=${KEY}`.
+3. The code reads it with `os.getenv("KEY")`.
+
+Adding a new key means editing both the host `.env` and the override, then
+recreating the gateway. Both are user actions.
+
+`.env.example` in this directory is a REFERENCE LIST of the key names the code
+looks for. Do not copy it to `.env`.
+
+Keys currently passed through to the container (from
+`docker-compose.override.yml`):
+
+```
+HUNTER_API_KEY
+ABSTRACT_API_KEY
+EMAILREP_API_KEY
+NUMVERIFY_API_KEY
+VIRUSTOTAL_API_KEY
+URLSCAN_API_KEY
+OTX_API_KEY
+ABUSEIPDB_API_KEY
+CENSYS_API_KEY
+IPQS_API_KEY
+DEHASHED_API_KEY
+BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY
+```
+
+The code also looks for `SHODAN_API_KEY`, `GITHUB_TOKEN`,
+`OPENCORPORATES_API_KEY`, `COMPANIES_HOUSE_API_KEY`, `GREYNOISE_API_KEY`,
+`SECURITYTRAILS_API_KEY`, `WHOISXML_API_KEY` and `BINARY_EDGE_API_KEY`. None of
+those are wired through the override today, so the services that need them are
+skipped.
 
 ## Downloadable Breach Databases
 
@@ -120,7 +109,7 @@ See `leaks_dbs.md` for full list with torrent links.
 
 Quick start:
 ```bash
-mkdir -p /home/node/.openclaw/workspace/osint/data/leaks
+mkdir -p /opt/projects/osint/data/leaks
 
 # Common large dumps (search via torrent):
 # - Collection #1 (2018) ~87GB
@@ -135,22 +124,22 @@ grep -r "target@email.com" data/leaks/
 ## Verify Installation
 
 ```bash
-cd /home/node/.openclaw/workspace/osint
+cd /opt/projects/osint
 
 # Check all tools
-.venv/bin/python3 -c "import maigret; print('maigret OK')"
-.venv/bin/python3 -c "import sublist3r; print('sublist3r OK')"
-.venv/bin/python3 -c "import h8mail; print('h8mail OK')"
-.venv/bin/python3 -c "import holehe; print('holehe OK')"
-.venv/bin/python3 -c "import socialscan; print('socialscan OK')"
-.venv/bin/python3 -c "import ghunt; print('ghunt OK')"
-.venv/bin/python3 -c "import photon; print('photon OK')"
-.venv/bin/python3 -c "import wappalyzer; print('wappalyzer OK')"
-.venv/bin/python3 -c "import stem; print('stem OK')"
-.venv/bin/python3 -c "import requests; print('requests OK')"
-.venv/bin/python3 -c "import aiohttp; print('aiohttp OK')"
-.venv/bin/python3 -c "import scapy; print('scapy OK')"
-.venv/bin/python3 -c "import dns; print('dnspython OK')"
+./.venv/bin/python -c "import maigret; print('maigret OK')"
+./.venv/bin/python -c "import sublist3r; print('sublist3r OK')"
+./.venv/bin/python -c "import h8mail; print('h8mail OK')"
+./.venv/bin/python -c "import holehe; print('holehe OK')"
+./.venv/bin/python -c "import socialscan; print('socialscan OK')"
+./.venv/bin/python -c "import ghunt; print('ghunt OK')"
+./.venv/bin/python -c "import photon; print('photon OK')"
+./.venv/bin/python -c "import wappalyzer; print('wappalyzer OK')"
+./.venv/bin/python -c "import stem; print('stem OK')"
+./.venv/bin/python -c "import requests; print('requests OK')"
+./.venv/bin/python -c "import aiohttp; print('aiohttp OK')"
+./.venv/bin/python -c "import scapy; print('scapy OK')"
+./.venv/bin/python -c "import dns; print('dnspython OK')"
 
 # Check git clone tools
 ls theHarvester/ 2>/dev/null && echo "theHarvester cloned OK"
@@ -164,22 +153,22 @@ which nmap && echo "nmap OK"
 ## Running the OSINT Runner
 
 ```bash
-cd /home/node/.openclaw/workspace/osint
+cd /opt/projects/osint
 
 # Basic cascade (auto-follows connections)
-.venv/bin/python3 src/main.py --query "Jan Kowalski"
+./.venv/bin/python src/main.py --query "Jan Kowalski"
 
 # One-shot (no cascade)
-.venv/bin/python3 src/main.py --query "Jan Kowalski" --no-cascade
+./.venv/bin/python src/main.py --query "Jan Kowalski" --no-cascade
 
 # Specific search
-.venv/bin/python3 src/main.py --query "email:target@gmail.com"
-.venv/bin/python3 src/main.py --query "NIP:5261040828"
-.venv/bin/python3 src/main.py --query "KRS:0000123456"
-.venv/bin/python3 src/main.py --query "domain:example.com"
+./.venv/bin/python src/main.py --query "email:target@gmail.com"
+./.venv/bin/python src/main.py --query "NIP:5261040828"
+./.venv/bin/python src/main.py --query "KRS:0000123456"
+./.venv/bin/python src/main.py --query "domain:example.com"
 
 # Markdown output
-.venv/bin/python3 src/main.py --query "Jan Kowalski" --format markdown
+./.venv/bin/python src/main.py --query "Jan Kowalski" --format markdown
 ```
 
 ## Project Structure
@@ -209,5 +198,6 @@ osint/
 ├── theHarvester/            # Git cloned: email enum
 ├── Amass/                   # Git cloned: subdomain enum
 ├── pyproject.toml           # Python dependencies
-└── .env                     # API keys (create from free_with_api.md)
+├── .env.example             # Reference list of key names (never copied to .env)
+└── .venv/                   # Python 3.12 venv (gitignored, built per machine)
 ```

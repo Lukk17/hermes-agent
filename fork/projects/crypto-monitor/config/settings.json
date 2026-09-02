@@ -1,7 +1,8 @@
 {
-  "discord": {
-    "channel_id": 1470798824791343317,
-    "channel_name": "crypto-monitor"
+  "delivery": {
+    "platform": "discord",
+    "conversation": "1543645766076342312",
+    "thread": null
   },
   "api_endpoints": {
     "coingecko": "https://api.coingecko.com/api/v3",

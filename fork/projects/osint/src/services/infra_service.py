@@ -1,6 +1,6 @@
 from src.services.base_service import BaseService
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.ascend_client import HumanInterventionNeeded, ascend_client
 import asyncio
 
 
@@ -193,6 +193,8 @@ class InfraService(BaseService):
             result = await ascend_client.scrape(f"https://dnsdumpster.com/", include_links=True, heavy_mode=True)
             content = result.get("content", "")
             return ServiceResult(source="dnsdumpster", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="dnsdumpster", success=False, error=str(e))
 

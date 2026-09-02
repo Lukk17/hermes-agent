@@ -1,6 +1,6 @@
 from src.services.base_service import BaseService
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.ascend_client import HumanInterventionNeeded, ascend_client
 import asyncio
 
 
@@ -71,6 +71,8 @@ class GitHubService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="github_org_search", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="github_org_search", success=False, error="Scraper timeout (10s)")
         except Exception as e:

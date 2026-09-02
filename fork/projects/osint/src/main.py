@@ -11,6 +11,9 @@ load_dotenv()  # secrets come from container env (fork repo .env), not workspace
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models import OsintQuery, OsintResponse, ServiceResult
+from src.ascend_client import HumanInterventionNeeded
+from src.captcha_handler import HumanInterventionPending, get_captcha_handler
+from src.paths import INTERVENTIONS_DIR
 from src.report_renderer import renderer
 from src.services.email_service import EmailService
 from src.services.phone_service import PhoneService
@@ -27,6 +30,22 @@ from src.services.infra_service import InfraService
 from src.services.recon_service import ReconService
 from src.services.social_extra_service import SocialExtraService
 from src.services.darkweb_service import DarkWebService
+
+EXIT_HUMAN_INTERVENTION = 3
+
+
+class ResumeStateMissing(FileNotFoundError):
+    """No paused run was persisted under the given resume token."""
+
+
+class InterventionRequired(Exception):
+    """A captcha wall paused the run; carries everything main() must persist."""
+
+    def __init__(self, needed: HumanInterventionNeeded, query: OsintQuery, partial_results: list):
+        self.needed = needed
+        self.query = query
+        self.partial_results = partial_results
+        super().__init__(str(needed))
 
 
 async def run_email_search(email: str) -> list[ServiceResult]:
@@ -190,22 +209,31 @@ async def dispatch_queries(query: OsintQuery) -> OsintResponse:
     if query.linkedin:
         tasks.append(("linkedin", run_linkedin_search(query.linkedin)))
 
-    if tasks:
-        results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
-        task_names = [name for name, _ in tasks]
-        for i, result in enumerate(results):
-            task_name = task_names[i]
-            if isinstance(result, Exception):
-                response.errors.append(f"{task_name}: {str(result)}")
-            elif isinstance(result, list):
-                for item in result:
-                    if isinstance(item, ServiceResult):
-                        response.results.append(item)
-            elif isinstance(result, ServiceResult):
-                response.results.append(result)
+    intervention = None
 
-    from src.ascend_client import ascend_client
-    await ascend_client.close()
+    try:
+        if tasks:
+            results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
+            task_names = [name for name, _ in tasks]
+            for i, result in enumerate(results):
+                task_name = task_names[i]
+                if isinstance(result, HumanInterventionNeeded):
+                    intervention = intervention or result
+                elif isinstance(result, Exception):
+                    response.errors.append(f"{task_name}: {str(result)}")
+                elif isinstance(result, list):
+                    for item in result:
+                        if isinstance(item, ServiceResult):
+                            response.results.append(item)
+                elif isinstance(result, ServiceResult):
+                    response.results.append(result)
+    finally:
+        from src.ascend_client import ascend_client
+        await ascend_client.close()
+
+    if intervention is not None:
+        intervention.partial_results = [r.model_dump() for r in response.results]
+        raise intervention
 
     return response
 
@@ -402,42 +430,120 @@ def parse_raw_input(raw: str) -> OsintQuery:
     return OsintQuery(**{k: v for k, v in fields.items() if v is not None})
 
 
+def state_file(resume_token: str) -> Path:
+    return INTERVENTIONS_DIR / f"{resume_token}.json"
+
+
+def load_resume_state(resume_token: str) -> dict:
+    """Load the state persisted when a run paused for a human.
+
+    Raises:
+        ResumeStateMissing: when no run was paused under that token.
+    """
+    path = state_file(resume_token)
+    if not path.exists():
+        raise ResumeStateMissing(f"No paused run for token {resume_token} ({path})")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_resume_state(pending: HumanInterventionPending, paused: "InterventionRequired") -> Path:
+    """Persist the paused run so `--resume <token>` can continue it."""
+    path = state_file(pending.resume_token)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "intervention": pending.to_dict(),
+        "query": paused.query.model_dump(),
+        "partial_results": paused.partial_results,
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return path
+
+
 async def main_async(args: argparse.Namespace) -> tuple:
-    if args.input:
+    resumed_results: list[ServiceResult] = []
+
+    if args.resume:
+        state = load_resume_state(args.resume)
+        query = OsintQuery(**state["query"])
+        resumed_results = [ServiceResult(**r) for r in state.get("partial_results", [])]
+    elif args.input:
         query_dict = json.loads(args.input)
         query = OsintQuery(**query_dict)
     elif args.query:
         query = parse_raw_input(args.query)
     else:
-        print("Error: Provide --query or --input", file=sys.stderr)
+        print("Error: Provide --query, --input or --resume", file=sys.stderr)
         sys.exit(1)
 
-    if getattr(args, "no_cascade", False):
-        response = await dispatch_queries(query)
-        return response, None
+    try:
+        if getattr(args, "no_cascade", False):
+            response = await dispatch_queries(query)
+            cascade_results = None
+        else:
+            response, cascade_results = await dispatch_queries_cascade(query)
+    except HumanInterventionNeeded as exc:
+        carried = [r.model_dump() for r in resumed_results] + exc.partial_results
+        raise InterventionRequired(exc, query, carried) from exc
 
-    response, cascade_results = await dispatch_queries_cascade(query)
+    response.results = resumed_results + response.results
     return response, cascade_results
 
 
-async def dispatch_queries_cascade(query: OsintQuery) -> tuple:
-    from src.cascade_engine import CascadeEngine
-    engine = CascadeEngine(query, max_depth=3)
-    cascade_results = await engine.run()
-
-    response = OsintResponse(query=query)
+def flatten_cascade(cascade_results: list) -> list[ServiceResult]:
+    """Flatten cascade results into ServiceResults tagged with their cascade origin."""
+    flattened = []
     for cr in cascade_results:
         for service_result in cr.results:
             service_result.data = service_result.data or {}
             service_result.data["_cascade_depth"] = cr.depth
             service_result.data["_cascade_data_type"] = cr.data_type
             service_result.data["_cascade_data_value"] = cr.data_value
-            response.results.append(service_result)
+            flattened.append(service_result)
+    return flattened
 
-    from src.ascend_client import ascend_client
-    await ascend_client.close()
+
+async def dispatch_queries_cascade(query: OsintQuery) -> tuple:
+    from src.cascade_engine import CascadeEngine
+    engine = CascadeEngine(query, max_depth=3)
+
+    try:
+        cascade_results = await engine.run()
+    except HumanInterventionNeeded as exc:
+        exc.partial_results = [r.model_dump() for r in flatten_cascade(engine.cascade_results)]
+        raise
+    finally:
+        from src.ascend_client import ascend_client
+        await ascend_client.close()
+
+    response = OsintResponse(query=query)
+    response.results.extend(flatten_cascade(cascade_results))
 
     return response, cascade_results
+
+
+def pause_for_human(paused: InterventionRequired) -> dict:
+    """Deliver the captcha prompt, persist the run, and describe how to resume it.
+
+    Runs outside the event loop: delivery shells out to the agent runtime.
+    """
+    pending = None
+    try:
+        get_captcha_handler().handle_intervention(paused.needed, paused.needed.url)
+    except HumanInterventionPending as exc:
+        pending = exc
+
+    if pending is None:
+        raise RuntimeError("handle_intervention returned without pausing the run")
+
+    state_path = save_resume_state(pending, paused)
+    record = {
+        "status": "human_intervention_required",
+        "resume_command": f"src/main.py --resume {pending.resume_token}",
+        "state_file": str(state_path),
+        "partial_result_count": len(paused.partial_results),
+    }
+    record.update(pending.to_dict())
+    return record
 
 
 def main():
@@ -448,9 +554,18 @@ def main():
     parser.add_argument("--location", type=str, help="Location for person search")
     parser.add_argument("--format", type=str, default="json", choices=["json", "markdown"], help="Output format")
     parser.add_argument("--no-cascade", action="store_true", help="Disable cascade search (one-shot mode)")
+    parser.add_argument("--resume", type=str, metavar="TOKEN", help="Resume a run paused for human captcha solving")
     args = parser.parse_args()
 
-    response, cascade_results = asyncio.run(main_async(args))
+    try:
+        response, cascade_results = asyncio.run(main_async(args))
+    except InterventionRequired as paused:
+        print(json.dumps(pause_for_human(paused), indent=2))
+        sys.exit(EXIT_HUMAN_INTERVENTION)
+    except ResumeStateMissing as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     if args.format == "markdown":
         if cascade_results:
             print(renderer.render_cascade(cascade_results, response.query))

@@ -20,48 +20,100 @@ Run `skills list` mentally before each turn and pull in every skill that fits.
 
 Source code (tracked):
 
-- `daily_report_pipeline.sh` — runs `scripts/report_generator.py` (collectors + analyzers + chart generation). Outputs to `data/reports/report_latest.json` and chart PNGs in `data/reports/`. **Paths inside this script are hardcoded to `/opt/projects/crypto-monitor/`** (hermes layout), NOT to OpenClaw paths.
-- `scripts/report_generator.py` — main orchestrator. Runs prefetch, collectors, analyzers, daily report generator.
-- `scripts/report_generator.py` calls into `collectors/`, `analyzers/`, and `reports/daily_report.py` (a sub-module of `scripts/`).
+- `daily_report_pipeline.sh` — runs `scripts/report_generator.py` (collectors + analyzers + chart generation). Outputs `data/reports/report_latest.json` plus the chart PNGs listed under "Daily report workflow". **Paths inside this script are hardcoded to `/opt/projects/crypto-monitor/`**, the container layout.
+- `scripts/report_generator.py` — runs prefetch, collectors, analyzers, then the report builder. Writes `data/reports/report_latest.json` and the chart PNGs.
+- `scripts/generate_summaries.py` — calls the agent twice through the seam and writes `data/reports/news_summary.md` and `data/reports/market_summary.md`.
+- `scripts/post_to_discord.py` — assembles the fixed message sequence and publishes it. This is the pipeline's final step, not something the agent runs.
+- `services/agent_bridge.py` — the ports-and-adapters seam, the one place the project crosses out of its own process. Two public functions, `ask_agent()` and `send_message()`, plus `check_available()` and six exception types.
 - `collectors/` — 20+ Python scripts that fetch raw data (CoinGecko shared cache, BTC/ETH whale trackers, Fear & Greed, ETF flows, news, influencers, gas prices, sector performance, etc.). Saves to `data/<category>/`.
 - `analyzers/` — 5 Python scripts that process raw data. Cycle score, sentiment, trend detection, whale signals, airdrop tracker. Saves to `data/<category>/`.
-- `reports/daily_report.py` (submodule of `scripts/`) — renders the daily Discord messages. Produces `data/reports/report_latest.json` and chart PNGs.
+- `reports/report_builder.py` — builds the report payload and the charts, and owns `CHART_ORDER`, `SECTION_ORDER`, `build_message_sequence()` and `build_delivery()`. This is where the delivery order is defined.
 - `tools/verify_wallets.py` — one-off wallet verification helper.
 - `config/` — JSON config: API endpoints (`settings.json`), whale registry (`whale_registry.json`), exchange wallets (`exchange_wallets.json`), influencer Twitter handles (`influencers.json`), airdrop opportunities (`airdrop_opportunities.json`).
-- `requirements.txt` — Python deps for the project's venv (NOT a system install).
-- `AGENT.md` — the original OpenClaw daily-task instructions. Path references are OpenClaw-specific (`/home/node/.openclaw/workspace/crypto-monitor`). **Read for context only**. The authoritative instructions are in this AGENTS.md plus the channel_prompts in `fork/hermes-config/config.yaml` (bind-mounted at `/opt/data/config.yaml` inside the container).
+- `pyproject.toml` — Python deps for the project's venv (NOT a system install). `requires-python = ">=3.11,<3.12"`, dependencies `matplotlib`, `numpy`, `Pillow`. There is no `requirements.txt`.
 - `USER_REQUIREMENTS.md` — chart dimensions, section ordering, emoji headers, braille blank rules. Follow for any report composition.
 - `SUMMARY_GUIDE.md` — indicator interpretations (Fear and Greed buckets, Cycle Score phases, RSI ranges, MA Cross signals, Pi Cycle, BTC Dominance thresholds). Use to interpret every number.
-- `README.md` — OpenClaw-era project overview, API key list, collector/analyzer inventory. Most of it is still relevant for hermes; the few OpenClaw-specific lines are noted inline.
-- `ARCHITECTURE.md` — full data flow diagram and caching strategy. OpenClaw terminology, but the data flow is the same.
+- `README.md` — project overview, API key list, collector/analyzer inventory.
+- `ARCHITECTURE.md` — full data flow diagram and caching strategy.
 - `TODO.md` — pending work.
 
 Runtime state (gitignored via `fork/projects/.gitignore`):
 
-- `.venv/` — Python virtualenv (with leading dot, gitignored). Built once per machine via `uv venv .venv --python python3.11` then then `./.venv/bin/pip install -r requirements.txt`.
-- `data/reports/` — generated reports and chart PNGs.
+- `.venv/` — Python virtualenv (with leading dot, gitignored). Built once per machine via `uv venv .venv --python python3.11` then `uv pip install --python ./.venv/bin/python -e .`.
+- `data/reports/` — generated report payload plus the gauge, narrative and coin-sentiment PNGs.
 - `data/_cache/` — shared API cache (TTL-based).
 - `data/news/news_latest.json` — news input to the daily pipeline (gitignored; reproduced from `data/news/news_<date>.json` snapshots).
 - `data/<category>/_latest.json` and `<category>_history.json` — per-collector/analyzer output (gitignored).
-- `logs/` — pipeline logs.
+- `data/reports/pipeline_errors_<date>.json` — one file per pipeline run listing the steps that failed. There is no `logs/` directory.
 
 ## Daily report workflow
 
-When triggered (either by the `crypto-monitor-daily` cron job or by a manual user message in `#hermes-crypto-monitor`):
+**The pipeline is the orchestrator and the agent is a subroutine inside it.** The
+report must look identical every morning, so the pipeline owns the structure and
+calls the agent only for the two pieces that genuinely need a model. The agent
+does not compose the post and does not publish it.
 
-1. `cd /opt/projects/crypto-monitor`
-2. Run `./daily_report_pipeline.sh` (uses the project's venv).
-3. Read `data/reports/report_latest.json` and `data/news/news_latest.json`.
-4. Generate two files, NO HEADER, just content per `AGENT.md`:
-    - `data/reports/news_summary.md`
-    - `data/reports/market_summary.md`
-5. Post a Discord-friendly summary to `#hermes-crypto-monitor` via the `discord.send` tool. Attach the PNG charts that exist (`gauge_*`, `table_*`, `trending_*`, `coin_sentiment*`, `btc_dominance*`). Follow section ordering and emoji headers from `USER_REQUIREMENTS.md`.
+`./daily_report_pipeline.sh` runs these steps in order and stops at the first
+failure:
 
-NEVER run `publish_pipeline.sh`, `scripts/publish_report.py`, or `scripts/discord_messages_generator.py`. Those are OpenClaw remnants and were removed when the project moved to hermes. The `discord.send` gateway tool replaces them.
+1. `scripts/report_generator.py` — collectors, analyzers, charts, writes `data/reports/report_latest.json`.
+2. A freshness assertion: if `report_latest.json` was not rewritten by this run, the pipeline refuses to publish.
+3. `scripts/generate_summaries.py` — calls `ask_agent()` twice and writes `data/reports/news_summary.md` and `data/reports/market_summary.md`, body text only with no headings.
+4. `scripts/post_to_discord.py` — assembles the fixed sequence and publishes it through `send_message()`.
+
+Exit codes: `0` published, `2` bad usage or the venv Python is missing, `3` the
+report generator failed, `4` the report was not rewritten this run, `5`
+publishing failed, `6` the summaries could not be written.
+
+### What the agent is asked for
+
+Only two things, both plain text with no heading, no preamble and no closing
+remark, because `reports/report_builder.py` supplies the headers:
+
+- `news_summary.md` — a numbered list of the ten most important headlines, each with one short clause on why it matters. It REPLACES the data-rendered `news` section rather than sitting beside it, under the header `## 📰 Trending News`.
+- `market_summary.md` — the closing summary, written to `SUMMARY_GUIDE.md`. It REPLACES the data-rendered `summary` section, under the header `## 📋 Market Summary`.
+
+`ask_agent()` shells out to `hermes -z`, the one-shot mode that prints only the
+final response with no banner and no session line. It is pinned to the
+`context_engine` toolset, the one toolset in the catalog that resolves to zero
+tools, so the summariser has no tool surface at all. It inherits the fork's model
+config, so no provider credentials are duplicated into the project. Memory is
+loaded for one-shot runs and cannot be suppressed without an upstream change, but
+the tool surface is empty and the prompts are self-contained, so the variance is
+phrasing rather than structure.
+
+### Delivery order
+
+Title first, then every chart, then the text sections. Fixed every run. A missing
+chart or section drops out without shifting anything that survives
+(`reports/report_builder.py`, `CHART_ORDER` and `SECTION_ORDER`).
+
+1. The title and timestamp.
+2. Eight charts, in this order: `gauge_fng`, `gauge_cycle`, `gauge_sentiment`, `trending_narratives`, `coin_sentiment`, `btc_dominance`, `btc_price`, `gas_history`.
+3. Up to fifteen text sections: prices, movers, news, indicators, breadth, sectors, gas, etf, stablecoins, funding, flows, whales, airdrops, summary, links.
+
+That is 24 messages at most. A typical run delivers about 22, because a couple of
+sections have no data.
+
+Chart files, three of which are NOT under `data/reports/`:
+
+- `data/reports/gauge_fng.png`, `gauge_cycle.png`, `gauge_sentiment.png`, `trending_narratives.png`, `coin_sentiment.png`
+- `data/dominance/charts/btc_dominance_2y.png`
+- `data/btc_price/btc_price_2y.png`
+- `data/gas/charts/gas_history_1y.png`
+
+There are no `table_*.png` files. Table rendering was removed in a refactor and
+the tables are sent as text.
+
+The delivery target lives in `config/settings.json` under `delivery`
+(`platform`, `conversation`, `thread`), not as a literal in code.
+
+`publish_pipeline.sh`, `scripts/publish_report.py` and
+`scripts/discord_messages_generator.py` do not exist.
 
 ## Available data sources
 
-From `.env`:
+Read from the container process environment (injected by `docker-compose.override.yml` from the gitignored repo-root `.env` on the host, never from a `.env` inside this project):
 
 - `BLOCKSCOUT_API_KEY` — on-chain via blockscout
 - `ALCHEMY_API_KEY` — on-chain via Alchemy
@@ -78,43 +130,54 @@ Keyless (used directly by collectors):
 
 ## Schedule
 
-Cron entry `crypto-monitor-daily` in `fork/hermes-config/cron/jobs.json` (bind-mounted at `/opt/data/cron/jobs.json`) fires daily at 10:00 UTC, cron expression `0 10 * * *`, container timezone UTC. The job runs as the hermes container user, so it can call `./daily_report_pipeline.sh` directly.
+Cron entry `crypto-monitor-daily` in `fork/hermes-config/cron/jobs.json`
+(bind-mounted at `/opt/data/cron/jobs.json`) fires daily at 10:00 UTC, cron
+expression `0 10 * * *`, container timezone UTC.
+
+The job is `no_agent: true` with no `deliver` and no `prompt`. Cron runs the
+script and nothing else, so the pipeline's exit code is the only signal. There is
+no agent turn in the scheduled path at all.
+
+The `script` field is the bare basename `crypto-monitor-daily.sh`, and it
+resolves through a two-file pair:
+
+- `fork/hermes-config/scripts/crypto-monitor-daily.sh` is a small wrapper, bind-mounted at `/opt/data/scripts/crypto-monitor-daily.sh`. It does nothing but `exec bash /opt/projects/crypto-monitor/daily_report_pipeline.sh`.
+- `fork/projects/crypto-monitor/daily_report_pipeline.sh` is the real pipeline.
+
+The wrapper is not pointless indirection. `cron/scheduler.py:4289-4300` refuses
+any `script` path that resolves outside `$HERMES_HOME/scripts`, which is
+`/opt/data/scripts`. Putting the pipeline's absolute path back into `jobs.json`
+re-breaks the job, and it breaks it silently: the scheduler folds the block into
+the prompt under a `## Script Error` heading and the job still records
+`last_status: ok`.
+
+Both `DISCORD_BOT_TOKEN` and `MINIMAX_API_KEY` must also be present in
+`hermes-data/.env`, not only in the compose passthrough. Hermes strips those two
+from every subprocess environment, so the pipeline's `hermes send` and
+`hermes -z` calls cannot see them otherwise. See the credentials section of
+`fork/NOTE-5-operations.md`.
 
 ## First-time setup
 
 ```bash
 cd /opt/projects/crypto-monitor
 uv venv .venv --python python3.11
-./.venv/bin/pip install -r requirements.txt
+uv pip install --python ./.venv/bin/python -e .
 # Smoke test
 ./.venv/bin/python scripts/report_generator.py
 ```
 
-If collectors fail with import errors, add the missing packages to `requirements.txt` and re-install. Re-run `hermes cron run crypto-monitor-daily` (dry-run) to verify end-to-end.
+If collectors fail with import errors, add the missing packages to the `dependencies` list in `pyproject.toml` and re-install.
 
-## Known paths to update
+`hermes cron run crypto-monitor-daily` is NOT a dry run. It triggers a real run of the job, including delivery to the Discord channel. Use it only when a real post is wanted.
 
-The Python code in `collectors/`, `analyzers/`, `scripts/`, and `reports/` is currently in transition from OpenClaw paths to hermes paths. Before this project is fully production-ready on hermes, the following hardcoded references must be reviewed and updated by the agent:
+## Path conventions in the Python code
 
-- `tools/verify_wallets.py` may reference absolute paths under `/home/node/.openclaw/`.
-- `config/settings.json` may point at an OpenClaw-specific API endpoint.
-- A handful of remaining collectors (altseason, defi_tvl, etf_flow,
-  exchange_flow_tracker, gas, funding, dominance, whale_* etc.) still
-  import `requests`/`urllib.request` directly. Migrate them to
-  `fetch_json`/`fetch_text` from `services/external.py` as you touch
-  them.
+Paths are derived from the file's own location, not hardcoded. `src/paths.py` is the single source of truth: `PROJECT_ROOT`, `DATA_DIR`, `REPORTS_DIR`, `CACHE_DIR`, `CONFIG_DIR`, `PYTHON_BIN`. Import from there rather than recomputing a relative path or writing an absolute one.
 
-Run `grep -rn '.openclaw\|/home/node' .` from the project root to find
-every hardcoded reference. Replace each with a path derived from
-`os.path.dirname(__file__)` or imported from `src.paths`.
-
-The pipeline currently runs from the project root via
-`daily_report_pipeline.sh`, so most relative paths work. The grep is
-mostly to catch absolute paths that were left over from the OpenClaw
-layout.
+The pipeline runs from the project root via `daily_report_pipeline.sh`, so relative paths resolve correctly.
 
 ## What this project is NOT
 
 - It is not a trading system. The agent does NOT execute trades, place orders, or move funds. Observation only.
-- It is not the OpenClaw project. The OpenClaw version of this same content lives at `\\wsl$\Ubuntu\home\lukk\.openclaw\workspace\crypto-monitor\`. Hermes reads from `/opt/projects/crypto-monitor/`, not the OpenClaw path.
-- It is not the gateway config. Channel behavior, API keys, and Discord settings live in `fork/hermes-config/config.yaml` and `.env`.
+- It is not the gateway config. Channel behavior, API keys, and Discord settings live in `fork/hermes-config/config.yaml` on the host and in the repo-root `.env`.

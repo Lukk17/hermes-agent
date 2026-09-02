@@ -9,3 +9,5 @@
 !/projects/**
 !/plugins
 !/plugins/**
+!/scripts
+!/scripts/**

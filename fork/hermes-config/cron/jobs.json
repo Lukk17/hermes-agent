@@ -8,20 +8,13 @@
         "expr": "0 10 * * *"
       },
       "enabled": true,
-      "script": "/opt/projects/crypto-monitor/daily_report_pipeline.sh",
+      "script": "crypto-monitor-daily.sh",
+      "no_agent": true,
       "workdir": "/opt/projects/crypto-monitor",
-      "prompt": "You are running the Crypto Monitor project. The daily pipeline just ran. Follow /opt/projects/crypto-monitor/AGENT.md and /opt/projects/crypto-monitor/USER_REQUIREMENTS.md exactly. Read /opt/projects/crypto-monitor/data/reports/report_latest.json and /opt/projects/crypto-monitor/data/news/news_latest.json. Generate these two files (NO HEADER, just content): /opt/projects/crypto-monitor/data/reports/news_summary.md (numbered list per AGENT.md) and /opt/projects/crypto-monitor/data/reports/market_summary.md (per SUMMARY_GUIDE.md). Then post a Discord-friendly summary into this channel. Use the discord.send tool, attach the PNG charts that exist in /opt/projects/crypto-monitor/data/reports/, follow section ordering and emoji headers from USER_REQUIREMENTS.md. Do not run publish_pipeline.sh or any other publish script. Post directly with the discord tool.",
-      "delivery": {
-        "discord": {
-          "channel_id": "1543645766076342312",
-          "thread": false
-        }
-      },
-      "timeout": 900,
-      "next_run_at": "2026-09-02T10:00:00+00:00",
+      "next_run_at": "2026-09-03T10:00:00+00:00",
       "schedule_display": "0 10 * * *",
       "fire_claim": null,
-      "last_run_at": "2026-09-01T10:20:57.037199+00:00",
+      "last_run_at": "2026-09-02T10:05:33.137768+00:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -29,5 +22,5 @@
       "state": "scheduled"
     }
   ],
-  "updated_at": "2026-09-01T10:20:57.044826+00:00"
+  "updated_at": "2026-09-02T10:05:33.145555+00:00"
 }

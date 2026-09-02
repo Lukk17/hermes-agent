@@ -1,0 +1,16 @@
+{
+  "jobs": [
+    {
+      "id": "crypto-monitor-daily",
+      "name": "Crypto Monitor - Daily Report",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 10 * * *"
+      },
+      "enabled": true,
+      "script": "crypto-monitor-daily.sh",
+      "no_agent": true,
+      "workdir": "/opt/projects/crypto-monitor"
+    }
+  ]
+}

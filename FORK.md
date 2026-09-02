@@ -1,6 +1,6 @@
 # Fork customization (Lukk17)
 
-This fork (a personal instance of [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)) keeps all local customization in net-new files so that future merges of upstream stay clean. Upstream files (`docker-compose.yml`, `Dockerfile`, `README.md`, `AGENTS.md`, source under `hermes-agent/`, `gateway/`, `tools/`, `web/`, `ui-tui/`, `hermes_cli/`, etc.) are intentionally untouched. The fork rebases onto upstream tags via `fork/NOTE-7-updating-from-upstream.md`.
+This fork (a personal instance of [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)) keeps all local customization in net-new files so that future merges of upstream stay clean. The repository root IS the hermes-agent checkout, so upstream files sit at the top level and are intentionally untouched: `docker-compose.yml`, `Dockerfile`, `README.md`, `AGENTS.md`, every top-level `*.py` (`run_agent.py`, `cli.py`, `model_tools.py`, `toolsets.py`, ...), and `agent/`, `gateway/`, `tools/`, `hermes_cli/`, `cron/`, `plugins/`, `providers/`, `web/`, `ui-tui/`, `apps/`, `website/`, `tests/`, and the rest. The fork rebases onto upstream tags via `fork/NOTE-7-updating-from-upstream.md`.
 
 This file is the entry point. Read it once. Then go to `fork/NOTE-1-install.md` for the install walkthrough.
 
@@ -8,8 +8,8 @@ This file is the entry point. Read it once. Then go to `fork/NOTE-1-install.md` 
 
 | File or directory | Purpose |
 |---|---|
-| `docker-compose.override.yml` | Auto-merged on top of upstream `docker-compose.yml`. Adds file-specific bind mounts for `./fork/hermes-config/SOUL.md`, `config.yaml`, `cron/jobs.json` at `/opt/data/...`; `./fork/projects:/opt/projects` for project workspaces; `.agents/skills:/opt/external-skills:ro` and `./skills:/opt/skills:ro` for skill discovery; env passthrough for messaging and OSINT keys; dashboard loopback bind on `127.0.0.1:9119` + `--tui` flag; image tag rename (`hermes-agent:fork-dashboard` instead of `hermes-agent:fork-tui`). |
-| `Dockerfile.fork` | One-line chown fix on top of `hermes-agent:fork`. Adds `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the TUI dist when `--tui` triggers a rebuild on startup. Used only by the dashboard service. |
+| `docker-compose.override.yml` | Auto-merged on top of upstream `docker-compose.yml`. Adds file-specific bind mounts for `./fork/hermes-config/SOUL.md`, `config.yaml`, `cron/jobs.json` at `/opt/data/...`; `./fork/projects:/opt/projects` for project workspaces; `.agents/skills:/opt/external-skills:ro` and `./skills:/opt/skills:ro` for skill discovery; env passthrough for messaging and OSINT keys; the dashboard loopback bind on `127.0.0.1:9119`; the `Dockerfile.fork` build for both services with `BASE_IMAGE=hermes-agent:upstream`; and the build-only `upstream-base` service that produces that base image. |
+| `Dockerfile.fork` | The fork's tools image, built on `BASE_IMAGE` (default `hermes-agent:upstream`, produced from the untouched upstream `Dockerfile`). Adds OSINT apt dependencies, pyenv with Python 3.11 (crypto-monitor) and 3.12 (osint), `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the dashboard's UI dist, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Used by BOTH the gateway and the dashboard service. |
 | `.env` (gitignored) | Local-only secrets and tokens. Auto-loaded by Docker Compose for variable substitution in `docker-compose.override.yml`. |
 | `fork/hermes-config/` | Tracked fork-specific config (formerly lived in `hermes-data/`). Contains `SOUL.md` (persona), `config.yaml` (runtime config), `cron/jobs.json` (scheduled jobs). File-specific bind mounts shadow the same paths inside the container at `/opt/data/`. Rebase onto upstream hermes never conflicts with this directory because upstream does not ship it. |
 | `fork/projects/` | Tracked project workspaces. One subdirectory per Discord channel. Mounted at `/opt/projects/` inside the container. Each subdir has its own `.venv/` (with leading dot, gitignored), `AGENTS.md`, source code. Currently: `crypto-monitor/`, `osint/`, `research/`. |
@@ -47,7 +47,7 @@ The dashboard container has the same hermes-data and fork/projects mounts plus S
 
 Variables wired in (full list in `docker-compose.override.yml`):
 
-- Discord: `DISCORD_BOT_TOKEN`, `DISCORD_ALLOWED_USERS`, `DISCORD_HOME_CHANNEL`, `DISCORD_REQUIRE_MENTION`, `DISCORD_FREE_RESPONSE_CH`,`, `DISCORD_AUTO_THREAD`, `DISCORD_COMMAND_SYNC_POLICY`, `GATEWAY_ALLOW_ALL_USERS`
+- Discord: `DISCORD_BOT_TOKEN`, `DISCORD_ALLOWED_USERS`, `DISCORD_HOME_CHANNEL`, `DISCORD_REQUIRE_MENTION`, `DISCORD_FREE_RESPONSE_CHANNELS`, `DISCORD_AUTO_THREAD`, `DISCORD_COMMAND_SYNC_POLICY`, `GATEWAY_ALLOW_ALL_USERS`
 - On-chain: `BLOCKSCOUT_API_KEY`, `ALCHEMY_API_KEY`, `CRYPTOPANIC_API_KEY`
 - Gmail OAuth: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`
 - OSINT / threat-intel: `HUNTER_API_KEY`, `ABSTRACT_API_KEY`, `EMAILREP_API_KEY`, `NUMVERIFY_API_KEY`, `VIRUSTOTAL_API_KEY`, `URLSCAN_API_KEY`, `OTX_API_KEY`, `ABUSEIPDB_API_KEY`, `CENSYS_API_KEY`, `IPQS_API_KEY`, `DEHASHED_API_KEY`, `BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY`
@@ -72,22 +72,38 @@ Full guide with screenshots and failure-mode table: see `fork/NOTE-3-discord.md`
 ## Bringing it up
 
 ```powershell
-# inspect the merged config to confirm the override applied
 docker compose config
+```
 
-# build both services
+```powershell
+docker compose --profile build build upstream-base
+```
+
+```powershell
 docker compose build gateway
+```
+
+```powershell
 docker compose build dashboard
+```
 
-# start
+```powershell
 docker compose up -d
+```
 
-# verify
-docker compose exec gateway /opt/hermes/.venv/bin/hermes doctor
-docker compose exec gateway /opt/hermes/.venv/bin/hermes cron list
-docker compose exec gateway /opt/hermes/.venv/bin/hermes skills list | measure count
+```powershell
+docker compose exec gateway hermes doctor
+```
+
+```powershell
+docker compose exec gateway hermes cron list
+```
+
+```powershell
 docker compose exec gateway ls /opt/projects
 ```
+
+`upstream-base` builds the untouched upstream `Dockerfile` into `hermes-agent:upstream`, the base both fork images sit on. It is a build-only service and never runs.
 
 The dashboard listens on `127.0.0.1:9119` of the host by default. For remote access use SSH tunnel (`ssh -L 9119:localhost:9119 <host>`) or nginx with basic auth (see `fork/NOTE-6-minipc-proxmox.md`).
 
@@ -106,7 +122,7 @@ The agent does NOT edit these files itself and does NOT recreate the container i
 - Bundling additional upstream messages platforms beyond Discord, the `messaging` tool, and the `telegram` placeholder. Adding one is a one-line credential addition to `.env` plus matching env passthrough in `docker-compose.override.yml`. Telegram env vars are commented out in the override, ready to uncomment.
 - A bundled kanban board UI. Hermes has kanban via the kanban DB (`hermes-data/kanban.db`), but no dedicated web UI for it. The dashboard exposes the existing chat surface only.
 - A web UI for the projects directories. Project workspaces are file-system-only. Operate through `git`, `docker compose exec`, and the hermes agent itself.
-- Re-bundling upstream hermes source into a single image that is already in `hermes-agent:fork`. We use upstream source via the image plus our fork overrides at runtime. No forks of the Python source are maintained.
+- Re-bundling upstream hermes source into a single image. We use the upstream source via `hermes-agent:upstream` plus the fork's tools layer and runtime overrides. No forks of the Python source are maintained.
 
 ## Migration from earlier fork versions
 

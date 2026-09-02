@@ -124,10 +124,10 @@ Each project can optionally ship an `AGENTS.user.md` (not `AGENTS.md`) at its ro
 
 ## Per-project conventions
 
-- Every project under `/opt/projects/<name>/` has its own Python virtualenv at `.venv/` (with leading dot, NOT tracked, built once per machine). Use `uv venv .venv --python python3.11` (or 3.12 for OSINT, which needs newer Python for some libraries), then `./.venv/bin/pip install -r requirements.txt` (or `uv pip install -e .` if the project ships a `pyproject.toml`).
+- Every project under `/opt/projects/<name>/` has its own Python virtualenv at `.venv/` (with leading dot, NOT tracked, built once per machine). Neither project's `.venv/` exists in a fresh clone or in the image, so building it is a REQUIRED first-run step, not an optional one: the crypto-monitor pipeline exits 2 without it. Use `uv venv .venv --python python3.11` (or 3.12 for OSINT, which needs newer Python for some libraries), then `uv pip install --python ./.venv/bin/python -e .`. Both current projects declare their dependencies in `pyproject.toml`; neither ships a `requirements.txt`. `uv` is at `/usr/local/bin/uv` in the image, and pyenv provides 3.11 and 3.12 under `/opt/pyenv/`.
 - Project scripts that need network access run through the project venv (`.venv/bin/python`).
 - Project artifacts (data/, reports/, cache/, .venv/) live INSIDE the project dir but are gitignored via `fork/projects/.gitignore`.
-- Project source code (scripts/, src/, AGENTS.md, requirements.txt, *.md docs) is tracked in git.
+- Project source code (scripts/, src/, AGENTS.md, pyproject.toml, *.md docs) is tracked in git.
 
 ---
 
@@ -136,7 +136,7 @@ Each project can optionally ship an `AGENTS.user.md` (not `AGENTS.md`) at its ro
 | Channel | Working dir | Persona file |
 |---|---|---|
 | `#hermes-general` | `/opt/projects/` | reads this file + ambient context |
-| `#hermes-crypto-monitor` | `/opt/projects/crypto-monitor/` | reads project AGENTS.md + USER_REQUIREMENTS.md + SUMMARY_GUIDE.md + AGENT.md |
+| `#hermes-crypto-monitor` | `/opt/projects/crypto-monitor/` | reads project AGENTS.md + USER_REQUIREMENTS.md + SUMMARY_GUIDE.md |
 | `#hermes-osint` | `/opt/projects/osint/` | reads project AGENTS.md + README.md + ARCHITECTURE.md |
 | `#hermes-research` | `/opt/projects/research/` | reads project AGENTS.md for topic subdir convention |
 
@@ -147,9 +147,11 @@ The agent switches working directory at the start of each turn based on the acti
 ## Tool conventions
 
 - For scheduled work, every project gets a cron entry in `fork/hermes-config/cron/jobs.json` (bind-mounted at `/opt/data/cron/jobs.json` inside the container) (the v2026.8.27+ format is JSON, NOT the old YAML). Schedules must be cron expressions (e.g. `0 10 * * *` for 10:00 UTC daily). Cron runs as the hermes container user, which means scripts can use `/opt/projects/<name>/.venv/bin/python` directly.
-- For Discord output, use the `discord.send` tool (provided by the gateway). Do NOT call Discord REST API directly from project scripts.
-- For OSINT and crypto lookups, use the env vars from `.env` (`HUNTER_API_KEY`, `ALCHEMY_API_KEY`, etc.). Never bake keys into project scripts.
-- For web scraping across projects, prefer the ascend scraper at `$ASCEND_SCRAPPER_URL`. Skip Playwright / Selenium unless the project explicitly says otherwise.
+- Discord output is the agent's own reply, not a tool call. There is NO agent-callable Discord send tool. `tools/discord_tool.py` registers only `discord` (read and moderate: fetch messages, list channels, pin, thread) and `discord_admin` (roles, deletes). `send_message` exists in `tools/send_message_tool.py` but is deliberately NOT registered as a model tool, so the agent cannot call it. Write the message as the final response and the gateway delivers it to the channel the turn came from. For a scheduled job that runs an agent turn, the job's `deliver` field in `fork/hermes-config/cron/jobs.json` routes the final response to the target channel. A job can also skip the agent entirely with `no_agent: true` and no `deliver`, in which case cron runs only its script and that script publishes for itself. `crypto-monitor-daily` works that way: the pipeline owns the structure and calls the agent only for the pieces that need a model.
+- To attach a file to that reply, put one line per file of the form `MEDIA:` followed by an absolute path in the final response, in plain text outside any code block, inline backticks or blockquote, and only for files that exist on disk. The platform adapter strips those lines and uploads the files. Anything else (a bare mention of a path, a link) is not an attachment.
+- Do NOT call the Discord REST API directly from project scripts.
+- For OSINT and crypto lookups, read the container process environment (`os.getenv("HUNTER_API_KEY")`, `os.getenv("ALCHEMY_API_KEY")`, and so on). Those values are injected by `docker-compose.override.yml` from the gitignored repo-root `.env` on the host. Never bake keys into project scripts and never create a `.env` inside a project directory.
+- For web scraping across projects, prefer the ascend scraper. Its base URL comes from the `ASCEND_SCRAPPER_URL` environment variable, falling back to `http://host.docker.internal:7021` when the variable is unset. Skip Playwright / Selenium unless the project explicitly says otherwise.
 
 ---
 
@@ -165,5 +167,5 @@ The Docker container runs as the user specified by `HERMES_UID`/`HERMES_GID` (de
 - It is not the AGENTS.user.md private notes file. That lives at `/opt/projects/AGENTS.user.md` if the user creates it.
 - It is not hermes system prompt. Hermes' actual system prompt is built from `fork/hermes-config/SOUL.md` (bind-mounted at `/opt/data/SOUL.md` inside the container) plus `channel_prompts` plus this file when cwd matches `/opt/projects/`.
 - It is not a config file. Persistent settings live in `fork/hermes-config/config.yaml`. Cron schedules live in `fork/hermes-config/cron/jobs.json`. Persona lives in `fork/hermes-config/SOUL.md` and `hermes-data/memories/`.
-- It is not a place to track historical OpenClaw files. Historical context belongs in git history, not in the working tree. If a file is no longer relevant, delete it.
+- It is not a place to track files from the projects' previous runtime. Historical context belongs in git history, not in the working tree. If a file is no longer relevant, delete it.
 - It is not the AGI manifesto. It is just the operating instructions that keep the four channels consistent.

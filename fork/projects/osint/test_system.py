@@ -8,10 +8,11 @@ import sys
 import os
 import subprocess
 import importlib
+import tempfile
 
-# Setup paths
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.getcwd(), "src"))
+
+from src.paths import BIN_DIR, VENV_PY
 
 
 def test_imports():
@@ -43,11 +44,11 @@ def test_imports():
     results = []
     for svc in services:
         try:
-            mod = importlib.import_module(f"services.{svc}")
-            print(f"  [OK] services.{svc}")
+            mod = importlib.import_module(f"src.services.{svc}")
+            print(f"  [OK] src.services.{svc}")
             results.append(True)
         except Exception as e:
-            print(f"  [FAIL] services.{svc}: {e}")
+            print(f"  [FAIL] src.services.{svc}: {e}")
             results.append(False)
 
     return all(results)
@@ -56,7 +57,7 @@ def test_imports():
 def test_go_tools():
     """Test Go binary tools"""
     print("\n=== Testing Go Tools ===")
-    bin_dir = os.path.join(os.getcwd(), "bin")
+    bin_dir = BIN_DIR
     tools = {
         "amass": ["amass", "enum", "-help"],
         "subfinder": ["subfinder", "-version"],
@@ -67,13 +68,13 @@ def test_go_tools():
 
     results = []
     for name, args in tools.items():
-        bin_path = os.path.join(bin_dir, name)
+        bin_path = str(bin_dir / name)
         try:
             r = subprocess.run(
                 [bin_path] + args,
                 capture_output=True,
                 timeout=15,
-                env={**os.environ, "HOME": "/tmp"},
+                env={**os.environ, "HOME": tempfile.gettempdir()},
             )
             # Tools return 0 or 1 on help/version
             if r.returncode in (0, 1):
@@ -150,10 +151,8 @@ def test_go_tools_service():
     """Test GoTools service initialization"""
     print("\n=== Testing GoTools Service ===")
     try:
-        from services.gotools_service import GoToolsService
-        from services.gotools_service import BIN_DIR
+        from src.services.gotools_service import GoToolsService
         gt = GoToolsService()
-        # Check the module-level BIN_DIR
         print(f"  [OK] GoToolsService initialized (BIN_DIR={BIN_DIR})")
         return True
     except Exception as e:
@@ -165,7 +164,7 @@ def test_spiderfoot_service():
     """Test SpiderFoot service import and initialization"""
     print("\n=== Testing SpiderFoot Service ===")
     try:
-        from services.spiderfoot_service import SpiderFootService
+        from src.services.spiderfoot_service import SpiderFootService
         sf = SpiderFootService()
         # Check static/class attributes
         print(f"  [OK] SpiderFootService initialized (sf_cli={SpiderFootService._sf_cli})")
@@ -179,7 +178,7 @@ def test_email_service():
     """Test Email service"""
     print("\n=== Testing Email Service ===")
     try:
-        from services.email_service import EmailService
+        from src.services.email_service import EmailService
         es = EmailService()
         print(f"  [OK] EmailService initialized")
         return True
@@ -192,7 +191,7 @@ def test_domain_service():
     """Test Domain service"""
     print("\n=== Testing Domain Service ===")
     try:
-        from services.domain_service import DomainService
+        from src.services.domain_service import DomainService
         ds = DomainService()
         print(f"  [OK] DomainService initialized")
         return True
@@ -205,7 +204,7 @@ def test_people_service():
     """Test People service"""
     print("\n=== Testing People Service ===")
     try:
-        from services.people_service import PeopleService
+        from src.services.people_service import PeopleService
         ps = PeopleService()
         print(f"  [OK] PeopleService initialized")
         return True
@@ -218,7 +217,7 @@ def test_social_service():
     """Test Social service"""
     print("\n=== Testing Social Service ===")
     try:
-        from services.social_service import SocialService
+        from src.services.social_service import SocialService
         ss = SocialService()
         print(f"  [OK] SocialService initialized")
         return True
@@ -231,7 +230,7 @@ def test_report_renderer():
     """Test report renderer"""
     print("\n=== Testing Report Renderer ===")
     try:
-        from report_renderer import ReportRenderer
+        from src.report_renderer import ReportRenderer
         rr = ReportRenderer()
         print("  [OK] ReportRenderer initialized")
         return True
@@ -244,7 +243,7 @@ def test_cascade_engine_class():
     """Test cascade engine class definition"""
     print("\n=== Testing CascadeEngine Class ===")
     try:
-        from cascade_engine import CascadeEngine
+        from src.cascade_engine import CascadeEngine
         # Check signature - it requires query: OsintQuery
         import inspect
         sig = inspect.signature(CascadeEngine.__init__)
@@ -277,7 +276,7 @@ def test_models():
 def test_venv_python():
     """Test venv Python is correct"""
     print("\n=== Testing Python Environment ===")
-    py = os.path.join(os.getcwd(), ".venv", "bin", "python")
+    py = str(VENV_PY)
     try:
         result = subprocess.run([py, "--version"], capture_output=True, text=True)
         version = result.stdout.strip()

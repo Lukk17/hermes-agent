@@ -1,5 +1,5 @@
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.ascend_client import HumanInterventionNeeded, ascend_client
 from bs4 import BeautifulSoup
 import re
 
@@ -15,6 +15,8 @@ class SocialService:
             parsed["links"] = links
             parsed["profile_url"] = profile_url
             return ServiceResult(source="facebook_scrape", success=True, data=parsed)
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="facebook_scrape", success=False, error=str(e))
 
@@ -57,6 +59,8 @@ class SocialService:
             parsed["links"] = links
             parsed["profile_url"] = profile_url
             return ServiceResult(source="instagram_scrape", success=True, data=parsed)
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="instagram_scrape", success=False, error=str(e))
 
@@ -91,6 +95,8 @@ class SocialService:
             parsed["links"] = links
             parsed["profile_url"] = profile_url
             return ServiceResult(source="tiktok_scrape", success=True, data=parsed)
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="tiktok_scrape", success=False, error=str(e))
 

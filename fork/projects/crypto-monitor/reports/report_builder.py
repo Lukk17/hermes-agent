@@ -9,6 +9,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -22,6 +23,45 @@ from reports.sections import (
     render_airdrops, render_summary, render_links,
 )
 
+
+# Delivery order. Charts lead because the owner reads the graphs first.
+CHART_ORDER = (
+    "gauge_fng",
+    "gauge_cycle",
+    "gauge_sentiment",
+    "trending_narratives",
+    "coin_sentiment",
+    "btc_dominance",
+    "btc_price",
+    "gas_history",
+)
+
+SECTION_ORDER = (
+    "prices",
+    "movers",
+    "news",
+    "indicators",
+    "breadth",
+    "sectors",
+    "gas",
+    "etf",
+    "stablecoins",
+    "funding",
+    "flows",
+    "whales",
+    "airdrops",
+    "summary",
+    "links",
+)
+
+# Sections a model writes, keyed by the section they replace. The file holds body
+# text only, so the header lives here.
+MODEL_WRITTEN_SECTIONS = {
+    "news": ("news_summary.md", "## 📰 Trending News"),
+    "summary": ("market_summary.md", "## 📋 Market Summary"),
+}
+
+BRAILLE_SPACER = "⠀"
 
 # Data file paths
 PRICES_FILE = DATA_DIR / "coin_prices" / "coin_prices_latest.json"
@@ -196,133 +236,41 @@ def generate_charts(data: dict) -> dict:
 
 
 def build_message_sequence(sections: dict, charts: dict) -> list:
+    """Build the fixed delivery sequence: title, then every chart, then the text.
+
+    The order is the same every run. A missing chart or section drops out without
+    shifting anything that survives.
     """
-    Build ordered list of (text, image) tuples for Discord delivery.
-    """
-    messages = []
-
-    # Title (with chart if available)
-    title = sections.get("title", "")
-    if title:
-        messages.append((title, None))
-
-    # Prices table
-    prices_text = sections.get("prices", "")
-    prices_img = charts.get("table_prices")
-    if prices_img:
-        messages.append((None, prices_img))
-    elif prices_text:
-        messages.append((prices_text, None))
-
-    # Movers table
-    movers_text = sections.get("movers", "")
-    movers_img = charts.get("table_movers")
-    if movers_img:
-        messages.append((None, movers_img))
-    elif movers_text:
-        messages.append((movers_text, None))
-
-    # Indicators table
-    ind_text = sections.get("indicators", "")
-    ind_img = charts.get("table_indicators")
-    if ind_img:
-        messages.append((None, ind_img))
-    elif ind_text:
-        messages.append((ind_text, None))
-
-    # BTC Dominance chart
-    if charts.get("btc_dominance"):
-        messages.append((sections.get("breadth", ""), charts["btc_dominance"]))
-
-    # Sectors table
-    sec_text = sections.get("sectors", "")
-    sec_img = charts.get("table_sectors")
-    if sec_img:
-        messages.append((None, sec_img))
-    elif sec_text:
-        messages.append((sec_text, None))
-
-    # Gas chart
-    if charts.get("gas_history"):
-        gas_text = sections.get("gas", "")
-        messages.append((gas_text, charts["gas_history"]))
-
-    # ETF
-    etf_text = sections.get("etf", "")
-    if etf_text:
-        messages.append((etf_text, None))
-
-    # Stablecoins
-    sc_text = sections.get("stablecoins", "")
-    if sc_text:
-        messages.append((sc_text, None))
-
-    # Funding
-    fund_text = sections.get("funding", "")
-    if fund_text:
-        messages.append((fund_text, None))
-
-    # Exchange Flows
-    flows_text = sections.get("flows", "")
-    flows_img = charts.get("table_flows")
-    if flows_img:
-        messages.append((None, flows_img))
-    elif flows_text:
-        messages.append((flows_text, None))
-
-    # Whales
-    whale_text = sections.get("whales", "")
-    whale_img = charts.get("table_whales")
-    if whale_text:
-        for chunk in split_text_if_needed(whale_text):
-            messages.append((chunk, None))
-    if whale_img:
-        messages.append((None, whale_img))
-
-    # News
-    news_text = sections.get("news", "")
-    if news_text:
-        for chunk in split_text_if_needed(news_text):
-            messages.append((chunk, None))
-
-    # Airdrops
-    airdrop_text = sections.get("airdrops", "")
-    if airdrop_text:
-        messages.append((airdrop_text, None))
-
-    # Summary
-    summary_text = sections.get("summary", "")
-    if summary_text:
-        messages.append((summary_text, None))
-
-    # Links
-    links_text = sections.get("links", "")
-    if links_text:
-        messages.append((links_text, None))
+    messages = [(sections.get("title", ""), None)]
+    messages.extend((None, charts[name]) for name in CHART_ORDER if charts.get(name))
+    messages.extend((sections[key], None) for key in SECTION_ORDER if sections.get(key))
 
     return messages
 
 
-def split_text_if_needed(text: str, max_len: int = 1900) -> list:
-    """Split long text into chunks."""
-    if not text:
-        return []
-    if len(text) <= max_len:
-        return [text]
-    lines = text.split("\n")
-    chunks = []
-    current = []
-    current_len = 0
-    for line in lines:
-        if current_len + len(line) > max_len and current:
-            chunks.append("\n".join(current))
-            current = []
-            current_len = 0
-        current.append(line)
-        current_len += len(line) + 1
-    if current:
-        chunks.append("\n".join(current))
-    return chunks
+class DeliveryItem(NamedTuple):
+    text: str
+    image: Path | None
+
+
+def build_delivery(report_path: Path | str) -> list[DeliveryItem]:
+    """Load a saved report and return the ordered messages to deliver.
+
+    Raises:
+        OSError: the report cannot be read.
+        json.JSONDecodeError: the report is not valid JSON.
+    """
+    report_path = Path(report_path)
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    sections = _with_model_written_sections(
+        report.get("sections") or {}, report_path.parent
+    )
+    charts = {name: Path(path) for name, path in (report.get("charts") or {}).items()}
+
+    return [
+        DeliveryItem(text or "", Path(image) if image else None)
+        for text, image in build_message_sequence(sections, charts)
+    ]
 
 
 def build_report(text_only: bool = False) -> dict:
@@ -395,3 +343,20 @@ def build_report(text_only: bool = False) -> dict:
 
     print(f"\n✅ Report ready - {len(messages)} messages, {len(charts)} charts")
     return {"sections": sections, "charts": charts, "messages": messages}
+
+
+def _with_model_written_sections(sections: dict, report_dir: Path) -> dict:
+    merged = dict(sections)
+    for key, (filename, header) in MODEL_WRITTEN_SECTIONS.items():
+        body = _read_optional_text(report_dir / filename)
+        if body:
+            merged[key] = f"{header}\n{body}\n{BRAILLE_SPACER}"
+
+    return merged
+
+
+def _read_optional_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""

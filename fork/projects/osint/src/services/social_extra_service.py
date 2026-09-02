@@ -1,6 +1,6 @@
-from src.services.base_service import BaseService
+from src.services.base_service import BaseService, raise_if_intervention
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.ascend_client import HumanInterventionNeeded, ascend_client
 import asyncio
 
 
@@ -123,6 +123,8 @@ class SocialExtraService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="socialsearcher", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="socialsearcher", success=False, error="Timeout after 8s")
         except Exception as e:
@@ -137,6 +139,8 @@ class SocialExtraService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="tiktok", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="tiktok", success=False, error="Timeout after 8s")
         except Exception as e:
@@ -151,6 +155,8 @@ class SocialExtraService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="threads", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="threads", success=False, error="Timeout after 8s")
         except Exception as e:
@@ -187,6 +193,7 @@ class SocialExtraService(BaseService):
             self.search_threads(username),
             return_exceptions=True,
         )
+        raise_if_intervention(results)
         final = []
         for r in results:
             if isinstance(r, Exception):

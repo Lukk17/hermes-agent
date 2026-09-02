@@ -1,7 +1,8 @@
-# Tools + Python version manager layered on top of the upstream hermes-agent:fork.
+# Tools + Python version manager layered on top of the upstream hermes-agent image.
 #
-# This Dockerfile is the "tools" image. The base image (hermes-agent:fork) is
-# already built by the upstream Dockerfile and includes:
+# This Dockerfile is the "tools" image. The base image (hermes-agent:upstream) is
+# built from the upstream Dockerfile by the `upstream-base` compose service
+# (profile `build`) and includes:
 #   - Debian 13.4 (trixie) base
 #   - Python 3.13.5 in /opt/hermes/.venv (used by the hermes runtime)
 #   - uv at /usr/local/bin/uv (used to manage the hermes venv)
@@ -22,7 +23,15 @@
 # and dashboard are two entry points of the same Python module, not two
 # separate runtimes.
 
-FROM hermes-agent:fork
+ARG BASE_IMAGE=hermes-agent:upstream
+FROM ${BASE_IMAGE}
+
+ARG BASE_IMAGE
+ARG VCS_REF
+ARG BUILD_DATE
+LABEL org.opencontainers.image.base.name="${BASE_IMAGE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
 
 USER root
 
@@ -76,15 +85,15 @@ RUN apt-get -o Acquire::Retries=3 update && \
 # so the 3.11 and 3.12 installs are 30-60 second downloads each rather than
 # 5-10 minute compiles. uv is already in the base image.
 ENV PYENV_ROOT=/opt/pyenv
-ENV PATH="/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/hermes/bin:/usr/local/bin:/usr/bin:/bin"
+ENV PATH="/opt/hermes/bin:/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:/usr/local/bin:/usr/bin:/bin"
 ENV PYENV_PYTHON_BUILD=1
 RUN rm -rf /opt/pyenv && curl -fsSL https://pyenv.run | PYENV_ROOT=/opt/pyenv bash
 RUN pyenv --version
 RUN pyenv install 3.11 && \
     pyenv install 3.12 && \
-    pyenv global 3.11 && \
+    pyenv global system 3.11 3.12 && \
     pyenv versions && \
-    chmod -R 777 /opt/pyenv
+    chmod -R a+rX,go-w /opt/pyenv
 
 # ---------- TUI chown fix (the original reason this Dockerfile existed) ----------
 # The upstream image seals /opt/hermes read-only for the hermes user. The
@@ -101,4 +110,4 @@ RUN chown -R hermes:hermes /opt/hermes/ui-tui
 # permission-denied warning.
 RUN mkdir -p /opt/data/.local/bin &&     ln -sf /opt/hermes/.venv/bin/hermes /opt/data/.local/bin/hermes &&     chown -R hermes:hermes /opt/data/.local/bin
 
-USER hermes
+USER root

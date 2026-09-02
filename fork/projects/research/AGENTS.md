@@ -31,20 +31,20 @@ Each topic gets its own subdirectory named in `kebab-case`. The topic directory 
 ```
 research/
 ├── AGENTS.md                          # this file
-├── README.md                          # fork-level research index (auto-generated)
+├── README.md                          # topic index, written and maintained by the agent
 └── <topic-kebab-case>/                # one subdirectory per investigation
     ├── findings.md                     # what the agent learned (conclusions, evidence)
     ├── proposition.md                  # what to do with the findings (proposal)
     ├── prototype/                      # optional, only if a runnable artifact exists
     │   ├── README.md
     │   ├── <files>
-    │   └── .venv/                      # gitignored, with leading dot
+    │   └── .venv/                      # per-prototype, gitignored, with leading dot
     └── docs/                           # supporting documentation, links, raw notes
 ```
 
 Conventions:
 
-- The topic subdirectory name is a slug, not a number. `compare-hermes-vs-openclaw-event-loops` not `topic-001`.
+- The topic subdirectory name is a slug, not a number. `discord-gateway-rate-limits` not `topic-001`.
 - `findings.md` is the main deliverable. It is what the agent reports back to the user with. Keep it skimmable.
 - `proposition.md` is optional. Use it when the findings imply an action. Skip it for pure research questions.
 - `prototype/` is for runnable artifacts only. README explains how to run. `.venv/` is gitignored.
@@ -59,12 +59,12 @@ When the user types something like `research <topic description>` in `#hermes-re
 2. `mkdir -p /opt/projects/research/<topic-slug>/{prototype,docs}` if a prototype is anticipated, else just the topic dir.
 3. Do the research. Use the appropriate tools (web search, ascend scraper, project subagents, etc.).
 4. Write `findings.md` (and optionally `proposition.md`).
-5. Post a Discord-friendly summary to `#hermes-research` via the `discord.send` tool. Attach `findings.md` as a file. The summary should be short (3-5 paragraphs max) and link to the file for full reading.
-6. Update `research/README.md` (the fork-level index) with a new entry under "Active topics" or "Completed topics".
+5. Write the Discord-friendly summary as the FINAL RESPONSE of the turn. There is no Discord send tool: the gateway delivers the final response to `#hermes-research` by itself. Keep it short (3-5 paragraphs max). To attach `findings.md`, add a line of the form `MEDIA:` followed by its absolute path, in plain text outside any code block, inline backticks or blockquote.
+6. Update `research/README.md` (the topic index) with a new entry under "Active topics" or "Completed topics". Create the file on the first research turn if it does not exist yet.
 
 ## Index maintenance
 
-`research/README.md` is the canonical index of every topic. It is updated at the end of every research turn. Keep it small. Two sections:
+`research/README.md` is the index of every topic. Nothing generates it: the agent creates it on first use and updates it at the end of every research turn. Keep it small. Two sections:
 
 - "Active topics": topics where the user is still iterating or expecting more work.
 - "Completed topics": topics that have a final `findings.md` and the user has moved on.
@@ -79,15 +79,14 @@ Format per entry:
 
 This project follows the same conventions as every other project in `/opt/projects/`:
 
-- Python dependencies live in a per-project venv at `/opt/projects/research/.venv/` (with leading dot, gitignored). Build it once per machine. Most research topics will not need a venv at all, only topics with runnable prototypes do.
+- Python dependencies live in a per-prototype venv at `/opt/projects/research/<topic-slug>/prototype/.venv/` (with leading dot, gitignored). Build it in the prototype directory when a topic needs one: `uv venv .venv --python python3.12`, then invoke `./.venv/bin/python` directly. There is no project-level venv, and most topics need none at all.
 - Cron-scheduled research is not the default. If a recurring research task is needed (e.g. weekly market scan), add a `fork/hermes-config/cron/jobs.json` entry (bind-mounted at `/opt/data/cron/jobs.json` inside the container) pointing at a topic-specific script.
 - Skill mounting: `/opt/external-skills/` and `/opt/skills/` are both available. Use them when appropriate. The user's earlier decision was that all skills go in the shared skills mount, not per-project. Stay consistent with that.
 
 ## What this project is NOT
 
 - It is NOT a note-taking system. Topics that the user wants to think about without an output are SOUL.md / MEMORY.md territory, not research topics.
-- It is NOT a Kanban. Tasks go in the kanban board (`hermes-data/kanban.db`, runtime state only, gitignored), not as research topics.
-- It is NOT the OpenClaw workspace. OpenClaw's analog lives at `\\wsl$\Ubuntu\home\lukk\.openclaw\workspace\research\`. Hermes reads from `/opt/projects/research/`, not from there.
+- It is NOT a Kanban. Tasks go in the kanban board, not as research topics. Inside the container that board is `/opt/data/kanban.db` (`HERMES_HOME` is `/opt/data`); on the host it is `hermes-data/kanban.db`, runtime state only and gitignored.
 
 ## Channel persona expectations
 

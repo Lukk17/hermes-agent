@@ -57,6 +57,8 @@ GATEWAY_ALLOW_ALL_USERS=true
 
 Access control: by default Hermes denies all users. Either fill `DISCORD_ALLOWED_USERS` with comma-separated Discord user IDs, or set `GATEWAY_ALLOW_ALL_USERS=true` for unrestricted access.
 
+Standing condition for this deployment: `GATEWAY_ALLOW_ALL_USERS=true` with an empty `DISCORD_ALLOWED_USERS` means anyone who can post in the four channels listed in `discord.allowed_channels` gets an agent with shell and filesystem access inside the container, and that is deliberate, but it is only safe while those four channels stay private. If any of them is ever opened up, or the bot is added to another server, fill `DISCORD_ALLOWED_USERS` first.
+
 Currently wired in `docker-compose.override.yml` under `gateway.environment:`:
 
 ```yaml
@@ -109,7 +111,7 @@ DM the bot from a Discord account, should reply.
 `@mention` it in a server channel, should reply.
 
 ```powershell
-docker compose exec gateway /opt/hermes/.venv/bin/hermes doctor
+docker compose exec gateway hermes doctor
 ```
 
 The Discord section should show connected.

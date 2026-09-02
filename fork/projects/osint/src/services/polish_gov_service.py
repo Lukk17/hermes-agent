@@ -1,6 +1,6 @@
-from src.services.base_service import BaseService
+from src.services.base_service import BaseService, raise_if_intervention
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.ascend_client import HumanInterventionNeeded, ascend_client
 import asyncio
 import re
 
@@ -27,13 +27,12 @@ class PolishGovService(BaseService):
                 "raw_content": content[:3000],
                 "company_links": links[:20],
             })
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="krs_online", success=False, error="Timeout after 15s")
         except Exception as e:
-            err_str = str(e)
-            if "human_intervention_required" in err_str or "captcha" in err_str.lower():
-                return ServiceResult(source="krs_online", success=False, error="CAPTCHA required: manual resolution needed via ascend scraper VNC")
-            return ServiceResult(source="krs_online", success=False, error=err_str)
+            return ServiceResult(source="krs_online", success=False, error=str(e))
 
     async def search_rejestr_io(self, query: str) -> ServiceResult:
         """Polish business registry - free API at api.rejestr.io.
@@ -76,13 +75,12 @@ class PolishGovService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="ekrs", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="ekrs", success=False, error="Timeout after 15s")
         except Exception as e:
-            err_str = str(e)
-            if "human_intervention_required" in err_str or "captcha" in err_str.lower():
-                return ServiceResult(source="ekrs", success=False, error="CAPTCHA required: manual resolution needed via ascend scraper VNC")
-            return ServiceResult(source="ekrs", success=False, error=err_str)
+            return ServiceResult(source="ekrs", success=False, error=str(e))
 
     async def search_ceidg(self, nip: str = None, name: str = None) -> ServiceResult:
         """Polish CEIDG (Centralna Ewidencja i Informacja o Działalności Gospodarczej) - via ascend scraper."""
@@ -100,13 +98,12 @@ class PolishGovService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="ceidg", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="ceidg", success=False, error="Timeout after 15s")
         except Exception as e:
-            err_str = str(e)
-            if "human_intervention_required" in err_str or "captcha" in err_str.lower():
-                return ServiceResult(source="ceidg", success=False, error="CAPTCHA required: manual resolution needed via ascend scraper VNC")
-            return ServiceResult(source="ceidg", success=False, error=err_str)
+            return ServiceResult(source="ceidg", success=False, error=str(e))
 
     async def search_regon(self, nip: str = None, name: str = None) -> ServiceResult:
         """Polish REGON (National Business Registry Number) - via ascend scraper."""
@@ -116,13 +113,12 @@ class PolishGovService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="regon", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="regon", success=False, error="Timeout after 15s")
         except Exception as e:
-            err_str = str(e)
-            if "human_intervention_required" in err_str or "captcha" in err_str.lower():
-                return ServiceResult(source="regon", success=False, error="CAPTCHA required: manual resolution needed via ascend scraper VNC")
-            return ServiceResult(source="regon", success=False, error=err_str)
+            return ServiceResult(source="regon", success=False, error=str(e))
 
     async def search_vat_registry(self, nip: str) -> ServiceResult:
         """Polish VAT taxpayers registry - via ascend scraper."""
@@ -134,13 +130,12 @@ class PolishGovService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="vat_registry", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="vat_registry", success=False, error="Timeout after 15s")
         except Exception as e:
-            err_str = str(e)
-            if "human_intervention_required" in err_str or "captcha" in err_str.lower():
-                return ServiceResult(source="vat_registry", success=False, error="CAPTCHA required: manual resolution needed via ascend scraper VNC")
-            return ServiceResult(source="vat_registry", success=False, error=err_str)
+            return ServiceResult(source="vat_registry", success=False, error=str(e))
 
     async def search_krd(self, query: str) -> ServiceResult:
         """Polish KRD (Credit Bureau) - via ascend scraper."""
@@ -152,13 +147,12 @@ class PolishGovService(BaseService):
             )
             content = result.get("content", "")
             return ServiceResult(source="krd", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except asyncio.TimeoutError:
             return ServiceResult(source="krd", success=False, error="Timeout after 15s")
         except Exception as e:
-            err_str = str(e)
-            if "human_intervention_required" in err_str or "captcha" in err_str.lower():
-                return ServiceResult(source="krd", success=False, error="CAPTCHA required: manual resolution needed via ascend scraper VNC")
-            return ServiceResult(source="krd", success=False, error=err_str)
+            return ServiceResult(source="krd", success=False, error=str(e))
 
     async def search_by_name(self, name: str) -> list[ServiceResult]:
         results = await asyncio.gather(
@@ -169,6 +163,7 @@ class PolishGovService(BaseService):
             self.search_krd(name),
             return_exceptions=True,
         )
+        raise_if_intervention(results)
         final = []
         for r in results:
             if isinstance(r, Exception):
@@ -183,6 +178,7 @@ class PolishGovService(BaseService):
             self.search_vat_registry(nip),
             return_exceptions=True,
         )
+        raise_if_intervention(results)
         final = []
         for r in results:
             if isinstance(r, Exception):

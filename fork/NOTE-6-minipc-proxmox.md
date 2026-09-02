@@ -23,7 +23,7 @@ runtime state. To make that work, the fork keeps three directories:
 
 Plus tracked in repo root:
 - `.env` (gitignored): local secrets.
-- `.agents/skills/`: curated skills, bind-mounted at `/opt/external-skills/`.
+- `.agents/skills/`: curated skills, bind-mounted at `/opt/external-skills/` (read-only).
 - `./skills/`: bundled hermes skills, bind-mounted at `/opt/skills/`.
 - `docker-compose.override.yml`, `Dockerfile.fork`: container wiring.
 
@@ -68,62 +68,83 @@ Bootstrap on a fresh minipc:
 
 ```bash
 sudo apt update && sudo apt install -y docker.io docker-compose-plugin git
+```
+
+```bash
 sudo mkdir -p /opt/hermes-fork && sudo chown $USER:$USER /opt/hermes-fork
-cd /opt/hermes-fork
-git clone https://github.com/Lukk17/hermes-agent.git .
+```
+
+```bash
+cd /opt/hermes-fork && git clone https://github.com/Lukk17/hermes-agent.git .
+```
+
+```bash
 cp .env.fork.example .env
-# edit .env: paste DISCORD_BOT_TOKEN, fill in API keys
-docker compose pull
-docker compose up -d
 ```
 
-### Pin the image tags in docker-compose.yml on the minipc
+Edit `.env`: paste `DISCORD_BOT_TOKEN`, fill in API keys, and set `HERMES_UID=$(id -u)` / `HERMES_GID=$(id -g)` so the container's runtime user matches the host owner of the checkout. Nothing chowns `/opt/projects`, so a mismatch means the agent gets EACCES on every project write.
 
-The upstream `docker-compose.yml` uses `build: .` plus `image: hermes-agent`.
-On the minipc you want `image:` only, no `build:`. The override already sets
-`image: hermes-agent:fork` for the gateway and `image: hermes-agent:fork-tui`
-for the dashboard, but those rely on a local build context which the minipc
-does not have.
+Then write `docker-compose.minipc.yml` as described in the next section. Only after that file exists can you pull, because pulling before it is in place would try to build or fetch the wrong images:
 
-After `git clone`, edit `docker-compose.yml` so both services come from
-Docker Hub:
-
-```yaml
-services:
-  gateway:
-    image: lukk17/hermes-agent:fork
-    container_name: hermes
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./hermes-data:/opt/data
-    env_file: .env
-    command: ["gateway", "run"]
-
-  dashboard:
-    image: lukk17/hermes-agent:fork-tui
-    container_name: hermes-dashboard
-    restart: unless-stopped
-    network_mode: host
-    depends_on:
-      - gateway
-    volumes:
-      - ./hermes-data:/opt/data
-    env_file: .env
-    command: ["dashboard", "--host", "127.0.0.1", "--no-open"]
+```bash
+docker compose -f docker-compose.yml -f docker-compose.minipc.yml pull
 ```
 
-Two key changes from the upstream compose on the minipc:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.minipc.yml up -d
+```
 
-- `image:` replaces `build:`. No `Dockerfile` or `Dockerfile.fork` needed on
-  the minipc.
-- `env_file: .env` replaces the per-key `environment:` block in
-  `docker-compose.override.yml`. Compose auto-loads `.env` for variable
-  substitution, but `env_file:` also pushes every variable into the
-  container. This avoids maintaining two parallel lists.
+Every later `docker compose` command on the minipc needs the same `-f` pair. Export it once per shell to avoid repeating it:
 
-The `extra_hosts` and the read-only `.agents/skills` mount stay in the
-override (mount `./.agents/skills` to `/opt/data/external-skills`).
+```bash
+export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+```
+
+### Use a minipc-only compose file, not an edit to docker-compose.yml
+
+The minipc pulls prebuilt images instead of building. Do NOT edit
+`docker-compose.yml` to achieve that: it is upstream-owned, so every edit to it
+becomes a rebase conflict on the next upstream sync. Do not edit
+`docker-compose.override.yml` either, because it is what the dev box builds
+with.
+
+Instead, add a third file, `docker-compose.minipc.yml`, tracked or hand-written
+on the minipc, and select it explicitly with `-f`. Compose applies files
+left-to-right, so the minipc file wins. It is NOT auto-merged the way
+`docker-compose.override.yml` is, and naming `-f` suppresses the automatic
+override merge, which is what you want here: the override carries `build:`
+blocks the minipc cannot satisfy.
+
+Local build tags on the dev box are `hermes-agent:upstream` (the untouched
+upstream image), `hermes-agent:fork` (gateway) and `hermes-agent:fork-dashboard`
+(dashboard). On Docker Hub they are published as
+`lukk17/hermes-agent-gateway` and `lukk17/hermes-agent-dashboard`.
+
+`docker-compose.minipc.yml` should:
+
+- Replace `build:` with `image: lukk17/hermes-agent-gateway:<tag>` for the
+  gateway and `image: lukk17/hermes-agent-dashboard:<tag>` for the dashboard.
+  Pin a versioned tag for anything that must be reproducible; `:latest` only
+  for a scratch box.
+- Reproduce the volume set the override provides: `./hermes-data:/opt/data`,
+  `./fork/projects:/opt/projects`, `./.agents/skills:/opt/external-skills:ro`,
+  `./skills:/opt/skills:ro`, plus the three file-level mounts for
+  `fork/hermes-config/SOUL.md`, `config.yaml` and `cron/jobs.json`.
+- Reproduce `extra_hosts: ["host.docker.internal:host-gateway"]` on the
+  gateway.
+- Use `env_file: .env` instead of the override's per-key `environment:` block.
+  Compose auto-loads `.env` for `${VAR}` substitution, but `env_file:` also
+  pushes every variable into the container, which avoids maintaining two
+  parallel lists.
+- Keep `network_mode: host` and the dashboard command
+  `["dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open"]`.
+
+The skills mount target is `/opt/external-skills`, NOT `/opt/data/external-skills`.
+That path is what `skills.external_dirs` in `fork/hermes-config/config.yaml`
+points at; getting it wrong means the skills silently do not load.
+
+This file does not exist in the repo yet. Write it once on the minipc from the
+bullet list above and keep it there.
 
 ### Sync skills from agent-standards
 
@@ -163,7 +184,7 @@ After either operation, no container restart is needed. Hermes rescans
 `external_dirs` on session start; to force a rescan without restarting:
 
 ```bash
-docker compose exec gateway /opt/hermes/.venv/bin/hermes skills reload
+docker compose exec gateway hermes skills reload
 ```
 
 ### Fork plugin (optional, future use)
@@ -177,12 +198,43 @@ If you later decide to add a fork plugin (for example, a custom OSINT tool
 or a Discord admin helper), create it at `hermes-data/plugins/<name>/`
 with a `plugin.yaml` and `__init__.py`. The container bind-mounts
 `hermes-data/` at `/opt/data/`, so the plugin shows up at
-`/opt/data/plugins/<name>/` inside the container. Install any third-party
-deps via:
+`/opt/data/plugins/<name>/` inside the container.
 
-```powershell
-docker compose exec gateway /opt/hermes/.venv/bin/pip install <pkg>
+Do NOT `pip install` into `/opt/hermes/.venv`. That tree is immutable by design:
+`docker/stage2-hook.sh:256-262` deliberately leaves it root-owned and
+non-writable so an agent session cannot self-modify the runtime and brick the
+gateway, and `Dockerfile:388` sets `HERMES_DISABLE_LAZY_INSTALLS=1` to seal the
+venv. Anything that did land there would be lost on the next image update,
+because `/opt/hermes` lives in the image rather than on the `/opt/data` volume.
+
+The sanctioned target is `/opt/data/lazy-packages`, set as
+`HERMES_LAZY_INSTALL_TARGET` at `Dockerfile:401`. It is seeded and chowned to
+the `hermes` user at every boot (`docker/stage2-hook.sh:250`), appended to the
+END of `sys.path` so a package there can only add modules and can never shadow
+a core one (`tools/lazy_deps.py:454-481`), wired in at startup by
+`activate_durable_lazy_target()` (`tools/lazy_deps.py:483-500`), and it lives on
+the data volume so it survives container recreates and image updates.
+
+Declaring `pip_dependencies` in a general plugin's `plugin.yaml` does nothing.
+The key is accepted without warning because it sits in `_KNOWN_MANIFEST_FIELDS`
+(`hermes_cli/plugins.py:718`), but the only code that consumes it is the
+memory-provider path (`hermes_cli/memory_setup.py:133`,
+`hermes_cli/web_server.py:6481-6689`). `hermes plugins install` does not help
+either: it takes a Git URL, an `owner/repo`, or an index name, and it installs
+no dependencies. So a hand-written local plugin's dependencies are a manual
+install.
+
+Run it as the `hermes` user, not root, for the same ownership reason as the CLI
+shim:
+
+```bash
+docker compose exec -u hermes gateway uv pip install --target /opt/data/lazy-packages <pkg>
 ```
+
+One caveat: hermes' own install path additionally passes `--constraint` from
+`_core_constraints_file()` (`tools/lazy_deps.py:727-736`), pinning shared
+transitive dependencies to the core venv's versions. A hand-run install skips
+that and can pull an incompatible transitive dependency.
 
 Remember that any file in `hermes-data/` is runtime state and not tracked
 in git. The plugin is created and configured on each minipc separately.
@@ -192,15 +244,35 @@ add a file-specific bind mount for the directory.
 ### Bring it up
 
 ```bash
-cd /opt/hermes-fork
-HERMES_UID=$(id -u) HERMES_GID=$(id -g) docker compose pull
+cd /opt/hermes-fork && export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+```
+
+```bash
+docker compose pull
+```
+
+```bash
 docker compose up -d
-# verify
+```
+
+```bash
 docker compose logs -f gateway
-docker compose exec gateway /opt/hermes/.venv/bin/hermes doctor
-docker compose exec gateway /opt/hermes/.venv/bin/hermes skills list
-docker compose exec gateway /opt/hermes/.venv/bin/hermes cron list
-docker compose exec gateway /opt/hermes/.venv/bin/hermes plugins list
+```
+
+```bash
+docker compose exec gateway hermes doctor
+```
+
+```bash
+docker compose exec gateway hermes skills list
+```
+
+```bash
+docker compose exec gateway hermes cron list
+```
+
+```bash
+docker compose exec gateway hermes plugins list
 ```
 
 The dashboard is at `http://localhost:9119` **on the minipc itself only**.
@@ -306,9 +378,14 @@ automation.
 After you push a new build to Docker Hub from the dev box:
 
 ```bash
-# on the minipc
-cd /opt/hermes-fork
+cd /opt/hermes-fork && export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+```
+
+```bash
 docker compose pull
+```
+
+```bash
 docker compose up -d --force-recreate
 ```
 
@@ -345,14 +422,17 @@ in `fork/hermes-config/config.yaml` (see `fork/NOTE-3-discord.md`):
 ```yaml
 discord:
   channel_prompts:
-    '1470798824791343317': |
+    '<crypto-monitor-channel-id>': |
       ... persona ...
-      All persistent files for this project go to /opt/data/projects/crypto-monitor/.
-      Create that directory on first use; treat it as the project's working tree.
-    '1489711334802063552': |
+      All persistent files for this project go to /opt/projects/crypto-monitor/.
+      Treat it as the project's working tree.
+    '<osint-channel-id>': |
       ... persona ...
-      All persistent files for this project go to /opt/data/projects/osint/.
+      All persistent files for this project go to /opt/projects/osint/.
 ```
+
+The path is `/opt/projects/<name>/`, from the `./fork/projects:/opt/projects`
+bind mount. It is NOT under `/opt/data/`.
 
 This is convention, not enforcement. The agent follows the instruction
 because the prompt says so. Agents in other channels do not see or touch
@@ -360,7 +440,6 @@ those subdirs unless explicitly asked. For hard isolation you need separate
 Hermes profiles (`hermes -p crypto`, `hermes -p osint`) running as
 separate containers with separate Discord bot users.
 
-The `fork/projects/<name>/` location is the canonical spot for
-project workspaces because it is tracked in git. Drop your OpenClaw
-project content there. Mounted at `/opt/projects/<name>/` inside the
-container.
+The `fork/projects/<name>/` location is the canonical spot for project
+workspaces because it is tracked in git. Mounted at `/opt/projects/<name>/`
+inside the container.

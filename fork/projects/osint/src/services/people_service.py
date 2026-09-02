@@ -1,14 +1,12 @@
 from src.models import ServiceResult
 import asyncio
 import subprocess
-import threading
 import json
 import os
 import re
-import shlex
 import time as time_module
 
-_VENV_PY = "/home/node/.openclaw/workspace/osint/.venv/bin/python3"
+from src.paths import DATA_DIR, REPORTS_DIR, VENV_PY, scratch_file
 
 
 def normalize_polish(text: str) -> str:
@@ -25,22 +23,24 @@ class PeopleService:
 
     async def search_sherlock(self, name: str, timeout: int = 8) -> ServiceResult:
         try:
-            out_file = f"/tmp/sherlock_out_{os.getpid()}_{safe_filename(name)}.txt"
+            out_file = scratch_file(f"sherlock_out_{safe_filename(name)}.txt")
             loop = asyncio.get_running_loop()
 
             def run_sync() -> str:
-                cmd = f"{_VENV_PY} -m sherlock_project {shlex.quote(name)} --print-found --no-color --timeout {timeout} > {out_file} 2>&1"
-                proc = subprocess.Popen(
-                    cmd,
-                    shell=True,
-                )
-                for _ in range(timeout * 4):
-                    if proc.poll() is not None:
-                        break
-                    time_module.sleep(0.25)
-                if proc.returncode is None:
-                    proc.kill()
-                    proc.wait()
+                with open(out_file, "w") as sink:
+                    proc = subprocess.Popen(
+                        [str(VENV_PY), "-m", "sherlock_project", name,
+                         "--print-found", "--no-color", "--timeout", str(timeout)],
+                        stdout=sink,
+                        stderr=subprocess.STDOUT,
+                    )
+                    for _ in range(timeout * 4):
+                        if proc.poll() is not None:
+                            break
+                        time_module.sleep(0.25)
+                    if proc.returncode is None:
+                        proc.kill()
+                        proc.wait()
                 try:
                     with open(out_file) as f:
                         return f.read()
@@ -66,18 +66,18 @@ class PeopleService:
     async def search_maigret(self, name: str, timeout: int = 10) -> ServiceResult:
         try:
             safe_name = safe_filename(name)
-            out_folder = "/home/node/.openclaw/workspace/osint/data"
-            out_file = f"{out_folder}/maigret_{safe_name}.json"
-            reports_dir = "/home/node/.openclaw/workspace/osint/reports"
+            out_folder = DATA_DIR
+            out_file = out_folder / f"maigret_{safe_name}.json"
+            reports_dir = REPORTS_DIR
             loop = asyncio.get_running_loop()
 
             def run_sync():
                 cmd = [
-                    _VENV_PY, "-m", "maigret", name,
+                    str(VENV_PY), "-m", "maigret", name,
                     "-J", "simple",
                     "--no-progressbar",
                     "--top-sites", "10",
-                    "-fo", out_folder,
+                    "-fo", str(out_folder),
                 ]
                 proc = subprocess.Popen(
                     cmd,
@@ -95,8 +95,8 @@ class PeopleService:
             await loop.run_in_executor(None, run_sync)
             candidates = [
                 out_file,
-                f"{reports_dir}/report_{safe_name}_simple.json",
-                f"{out_folder}/report_{safe_name}_simple.json",
+                reports_dir / f"report_{safe_name}_simple.json",
+                out_folder / f"report_{safe_name}_simple.json",
             ]
             data = None
             for path in candidates:

@@ -9,20 +9,30 @@ This note describes how to pull the latest upstream code into this fork, resolve
 | `main` | Auto-tracks `upstream/main`. You never commit here locally. Safe to delete if you want; re-create with `git branch main upstream/main`. | Receives upstream commits only, used as a reference for `git diff upstream/main..master`. |
 | `master` | The production build branch. Carries fork-specific files on top of an upstream release tag. | Rebased onto the latest upstream release tag each update cycle. |
 
-Hermes upstream uses `main` (not `master`) since late 2025. This fork was originally cloned from a `master`-named upstream but we keep the fork on `master` to match your openclaw convention.
+Hermes upstream uses `main` (not `master`) since late 2025. This fork was originally cloned from a `master`-named upstream and stays on `master` by choice.
 
 ## Image tag layout
 
 After each update cycle, the built images carry these names:
 
-| Docker image | Pushed as | Built from |
+| Local tag | Pushed as | Built from |
 |---|---|---|
-| `hermes-agent:fork` | `lukk17/hermes-agent:latest`<br>`lukk17/hermes-agent:v<UPSTREAM_TAG>-lukk` | upstream `Dockerfile` (gateway service, plain python image) |
-| `hermes-agent:fork-dashboard` | `lukk17/hermes-agent-dashboard:latest`<br>`lukk17/hermes-agent-dashboard:v<UPSTREAM_TAG>-lukk` | `Dockerfile.fork` (dashboard service, adds `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rebuild the TUI bundle on startup) |
+| `hermes-agent:upstream` | not pushed | the untouched upstream `Dockerfile`, via the build-only `upstream-base` service in `docker-compose.override.yml` |
+| `hermes-agent:fork` | `lukk17/hermes-agent-gateway:latest`<br>`lukk17/hermes-agent-gateway:v<UPSTREAM_TAG>-lukk` | `Dockerfile.fork` with `BASE_IMAGE=hermes-agent:upstream` (gateway service) |
+| `hermes-agent:fork-dashboard` | `lukk17/hermes-agent-dashboard:latest`<br>`lukk17/hermes-agent-dashboard:v<UPSTREAM_TAG>-lukk` | the same `Dockerfile.fork` and the same base (dashboard service) |
 
-The dashboard image was previously tagged `:fork-tui`. Renamed to `:fork-dashboard` because the image is the **dashboard** service, not a TUI. The dashboard page does render a TUI-like Ink/React console inside it, but the service name and the image are the dashboard. New tags drop the old `:fork-tui` alias.
+`Dockerfile.fork` is the fork's tools layer: OSINT apt dependencies, pyenv with
+Python 3.11 (crypto-monitor) and 3.12 (osint), the
+`chown -R hermes:hermes /opt/hermes/ui-tui` fix, and a
+`/opt/data/.local/bin/hermes` symlink. It takes `BASE_IMAGE` as a build arg so
+the upstream image keeps its own tag and is never rebuilt by the fork's
+Dockerfile. Both the gateway and the dashboard build from it; the only
+difference between them is the runtime command in compose.
 
-If you want a single combined image, build the gateway with the dashboard `Dockerfile.fork` chained on and stop maintaining the dashboard service in compose. Two-image setup is what this fork currently uses.
+Two older names are retired. The dashboard image was `:fork-tui`, renamed to
+`:fork-dashboard` because the image is the dashboard service, not a TUI. On
+Docker Hub the gateway repository was `lukk17/hermes-agent`, now
+`lukk17/hermes-agent-gateway`, so the two published repositories are symmetric.
 
 ## Pre-flight
 
@@ -111,56 +121,116 @@ git diff upstream/v2026.8.27..master -- docker-compose.override.yml Dockerfile.f
 # eyeball each diff to confirm overrides and NOTES still make sense with new upstream base
 ```
 
-### 5. Build both images
+### 5. Build the images
+
+```powershell
+docker compose --profile build build upstream-base
+```
 
 ```powershell
 docker compose build gateway
+```
+
+```powershell
 docker compose build dashboard
 ```
 
-Build order matters: gateway must finish first (it produces the `:fork` tag that `Dockerfile.fork` builds on top of).
+Build order matters only for the first command: `upstream-base` produces
+`hermes-agent:upstream`, which is the `BASE_IMAGE` both fork images sit on.
+`gateway` and `dashboard` are independent of each other.
 
 ### 6. Tag and push to Docker Hub
 
 ```powershell
 $tag = "v2026.8.27-lukk"
+```
 
-docker tag hermes-agent:fork           lukk17/hermes-agent:$tag
-docker tag hermes-agent:fork           lukk17/hermes-agent:latest
+```powershell
+docker tag hermes-agent:fork lukk17/hermes-agent-gateway:$tag
+```
+
+```powershell
+docker tag hermes-agent:fork lukk17/hermes-agent-gateway:latest
+```
+
+```powershell
 docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:$tag
-docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:latest
+```
 
-docker push lukk17/hermes-agent:$tag
-docker push lukk17/hermes-agent:latest
+```powershell
+docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:latest
+```
+
+```powershell
+docker push lukk17/hermes-agent-gateway:$tag
+```
+
+```powershell
+docker push lukk17/hermes-agent-gateway:latest
+```
+
+```powershell
 docker push lukk17/hermes-agent-dashboard:$tag
+```
+
+```powershell
 docker push lukk17/hermes-agent-dashboard:latest
 ```
 
-Each fork-built image carries two Docker Hub tags. Use the versioned one (`v2026.8.27-lukk`) for any deployment that should be reproducible, and `:latest` for the most recent build.
+`hermes-agent:upstream` is a local build artifact and is never pushed. Each
+fork-built image carries two Docker Hub tags. Use the versioned one
+(`v2026.8.27-lukk`) for any deployment that should be reproducible, and
+`:latest` for the most recent build.
 
 ### 7. Update the minipc to consume the new image
 
 On the dev box the minipc pulls from:
 
-```powershell
+```bash
 ssh user@minipc
-cd /opt/hermes-fork
+```
+
+```bash
+cd /opt/hermes-fork && export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+```
+
+```bash
 git pull
+```
+
+```bash
 docker compose pull
+```
+
+```bash
 docker compose up -d --force-recreate gateway dashboard
+```
+
+```bash
 docker compose exec gateway hermes doctor
+```
+
+```bash
 docker compose exec gateway hermes cron list
 ```
 
+The `COMPOSE_FILE` pair matters: `docker-compose.minipc.yml` is what replaces the
+`build:` blocks with registry images. See `fork/NOTE-6-minipc-proxmox.md`.
+
 If anything fails after the upgrade, roll back by pinning the previous image tag:
 
-```powershell
-# On the minipc
-docker compose pull lukk17/hermes-agent:v2026.8.19-lukk
+Edit `docker-compose.minipc.yml` on the minipc, set the gateway's `image:` to
+`lukk17/hermes-agent-gateway:v2026.8.19-lukk`, then:
+
+```bash
+docker compose pull gateway
+```
+
+```bash
 docker compose up -d --force-recreate gateway
 ```
 
-(Adjust the gateway service compose to `image: lukk17/hermes-agent:v2026.8.19-lukk` temporarily, then revert.)
+Revert the `image:` line once the newer build is fixed.
 
 ## Conflict resolution cheatsheet
 
@@ -198,10 +268,17 @@ Example: upstream introduced `HERMES_RUST_TOOLCHAIN_ENABLED`, your override does
 
 ### Upstream changed the TUI build path
 
-The dashboard runs `dashboard --tui` which rebuilds the React UI on startup. If the build path moved from `/opt/hermes/ui-tui` to something else, `Dockerfile.fork` needs updating to chown the new path or the runtime user hits EACCES.
+The dashboard rebuilds the React UI on startup and needs to write into
+`/opt/hermes/ui-tui`, which the upstream image seals read-only for the hermes
+user. That is the whole reason `Dockerfile.fork` chowns it. There is no `--tui`
+flag involved: the embedded chat surface is always on, and `--tui` is an
+accepted-and-ignored compat shim
+(`hermes_cli/subcommands/dashboard.py:110-124`).
 
-- Check upstream's new `Dockerfile` for how they handle the TUI directory permission
-- Update `Dockerfile.fork` accordingly, regenerate the image, verify with `docker compose logs dashboard` that the TUI build succeeds
+If the build path moves off `/opt/hermes/ui-tui`:
+
+- Check upstream's new `Dockerfile` for how they handle that directory's permissions
+- Update `Dockerfile.fork` accordingly, rebuild, verify with `docker compose logs dashboard` that the UI build succeeds
 
 ## First-time import from an old fork
 
@@ -245,20 +322,22 @@ git rebase v<TAG>
 # resolve conflicts, git add ..., git rebase --continue
 
 # build + tag + push
+docker compose --profile build build upstream-base
 docker compose build gateway
 docker compose build dashboard
-docker tag hermes-agent:fork           lukk17/hermes-agent:v<TAG>-lukk
-docker tag hermes-agent:fork           lukk17/hermes-agent:latest
+docker tag hermes-agent:fork           lukk17/hermes-agent-gateway:v<TAG>-lukk
+docker tag hermes-agent:fork           lukk17/hermes-agent-gateway:latest
 docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:v<TAG>-lukk
 docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:latest
-docker push lukk17/hermes-agent:v<TAG>-lukk
-docker push lukk17/hermes-agent:latest
+docker push lukk17/hermes-agent-gateway:v<TAG>-lukk
+docker push lukk17/hermes-agent-gateway:latest
 docker push lukk17/hermes-agent-dashboard:v<TAG>-lukk
 docker push lukk17/hermes-agent-dashboard:latest
 
 # consume on minipc
 ssh user@minipc
 cd /opt/hermes-fork
+export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
 git pull
 docker compose pull
 docker compose up -d --force-recreate gateway dashboard

@@ -61,14 +61,18 @@ Then in the dashboard, Add Provider → Anthropic (API key) → it picks up the 
 
 ### CLI fallback
 
-The `hermes` binary inside the container is at `/opt/hermes/.venv/bin/hermes`, not on the default `PATH`. Prefix all CLI commands with the full path. Also note: running `hermes auth add ...` inside a fresh container can fail with "Not logged into MiniMax OAuth" because the device-code wizard relies on session state from `hermes model`. The dashboard does not have this problem.
+Always call the CLI as plain `hermes`, never by absolute path. It is on `PATH` in both the image default (`Dockerfile:428`) and the fork's own override (`docker-compose.override.yml:23`), and both lead with `/opt/hermes/bin`.
+
+That directory holds a privilege-drop shim (`docker/hermes-exec-shim.sh`), and resolving it is the whole point. `docker compose exec` enters the container as root. The shim detects that, drops to the `hermes` user (uid 10000) via `s6-setuidgid`, exports `HOME=/opt/data`, and only then execs the real venv binary. Naming `/opt/hermes/.venv/bin/hermes` skips the shim and runs as root, so anything written under `/opt/data` lands root-owned and unreadable to the supervised gateway. The classic symptom: `hermes auth add ...` reports success, writes `/opt/data/auth.json` as `root:root` mode 0600, and every later message fails with a provider authentication error that points at your credential instead of at file ownership.
+
+Also note: running `hermes auth add ...` inside a fresh container can fail with "Not logged into MiniMax OAuth" because the device-code wizard relies on session state from `hermes model`. The dashboard does not have this problem.
 
 If you really want CLI:
 
 Open an interactive Hermes session (this is the supported flow):
 
 ```powershell
-docker compose exec -it gateway /opt/hermes/.venv/bin/hermes model
+docker compose exec -it gateway hermes model
 ```
 
 Pick the provider from the menu, follow the OAuth prompts. For headless/no-browser cases the CLI prints a URL + user code; open them on any device.
@@ -76,7 +80,7 @@ Pick the provider from the menu, follow the OAuth prompts. For headless/no-brows
 For accounts on the China MiniMax platform, the dashboard offers a region selector. CLI equivalent:
 
 ```powershell
-docker compose exec -it gateway /opt/hermes/.venv/bin/hermes auth add minimax-oauth --no-browser --region cn
+docker compose exec -it gateway hermes auth add minimax-oauth --no-browser --region cn
 ```
 
 (Run this from inside `hermes model` first to bootstrap the session, otherwise expect the "Not logged in" error.)
@@ -88,7 +92,7 @@ Easiest: dashboard, click the active provider, swap.
 CLI equivalent:
 
 ```powershell
-docker compose exec -it gateway /opt/hermes/.venv/bin/hermes model
+docker compose exec -it gateway hermes model
 ```
 
 ### Verifying
@@ -96,7 +100,7 @@ docker compose exec -it gateway /opt/hermes/.venv/bin/hermes model
 The dashboard's status page shows the active provider and whether auth is healthy. CLI equivalent:
 
 ```powershell
-docker compose exec gateway /opt/hermes/.venv/bin/hermes doctor
+docker compose exec gateway hermes doctor
 ```
 
 The Auth Providers section lists each configured provider with logged-in / not-logged-in state.

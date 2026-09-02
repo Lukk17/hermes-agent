@@ -1,146 +1,149 @@
-"""Human intervention handler for OSINT pipeline.
+"""Human intervention handler for the OSINT pipeline.
 
-When a scraper hits captcha/login, sends VNC URL to Discord and waits for user
-to solve it before continuing.
+When a scraper hits a captcha or login wall, this module delivers the VNC
+link to the project channel and raises HumanInterventionPending. It never
+waits for the answer: the pipeline runs inside the agent's own turn, so a
+human reply cannot reach this process until the turn ends. The agent owns
+the wait (its `clarify` tool) and re-invokes `main.py --resume <token>`.
 """
 
-import asyncio
 import json
-import subprocess
-import time
+import sys
+from pathlib import Path
+from uuid import uuid4
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from services import agent_bridge  # noqa: E402
+from src.paths import SETTINGS_FILE  # noqa: E402
+
+DEFAULT_PLATFORM = "discord"
 
 
-# Channel ID for osint - #claw-osint
-OSINT_CHANNEL_ID = "1470798594163478632"
-# Bot username to filter out
-BOT_USERNAME = "AscendClaw"
+class HumanInterventionPending(Exception):
+    """Raised after the intervention prompt is delivered and a human is needed.
+
+    Carries everything the caller must persist and print so the agent can
+    resume the run once the captcha is solved.
+    """
+
+    def __init__(
+        self,
+        resume_token: str,
+        vnc_url: str,
+        url: str,
+        intervention_type: str = "captcha",
+        message: str = "",
+        delivery_error: str = None,
+    ):
+        self.resume_token = resume_token
+        self.vnc_url = vnc_url
+        self.url = url
+        self.intervention_type = intervention_type
+        self.message = message
+        self.delivery_error = delivery_error
+        super().__init__(
+            f"Human intervention required ({intervention_type}) for {url}; "
+            f"resume with token {resume_token}"
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "resume_token": self.resume_token,
+            "vnc_url": self.vnc_url,
+            "url": self.url,
+            "intervention_type": self.intervention_type,
+            "message": self.message,
+            "prompt_delivered": self.delivery_error is None,
+            "delivery_error": self.delivery_error,
+        }
 
 
-async def send_captcha_to_discord(
+def load_channel_id(settings_file: Path | None = None) -> str:
+    """Read the project channel id from config/settings.json.
+
+    Raises:
+        FileNotFoundError: when the settings file is missing.
+        KeyError: when discord.channel_id is not configured.
+    """
+    path = Path(settings_file) if settings_file else SETTINGS_FILE
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    channel_id = settings.get("discord", {}).get("channel_id")
+    if not channel_id:
+        raise KeyError(f"discord.channel_id is not set in {path}")
+    return str(channel_id)
+
+
+def build_captcha_message(vnc_url: str, url: str, intervention_type: str, resume_token: str) -> str:
+    return (
+        f"Captcha required to continue the OSINT scan.\n\n"
+        f"URL: {url}\n"
+        f"Type: {intervention_type}\n\n"
+        f"Solve it here: {vnc_url}\n\n"
+        f"When it is solved, resume with: --resume {resume_token}"
+    )
+
+
+def send_captcha_prompt(
     vnc_url: str,
     url: str,
     intervention_type: str,
+    resume_token: str,
     channel_id: str = None,
 ) -> None:
-    """Send captcha notification to Discord."""
-    channel = channel_id or OSINT_CHANNEL_ID
+    """Deliver the captcha prompt to the project channel.
 
-    message = (
-        f"Captcha required to continue OSINT scan.\n\n"
-        f"URL: {url}\n"
-        f"Type: {intervention_type}\n\n"
-        f"Click here to solve: {vnc_url}\n\n"
-        f"Once solved, reply with just the word **done** to continue."
-    )
-
-    # Run in thread to avoid blocking event loop
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(
-        None,
-        lambda: subprocess.run(
-            ["openclaw", "message", "send",
-             "--channel", "discord",
-             "--target", f"channel:{channel}",
-             "--message", message],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    )
-
-
-def _read_messages_sync(channel: str, limit: int = 10) -> list:
-    """Read messages from Discord channel synchronously."""
-    try:
-        result = subprocess.run(
-            ["openclaw", "message", "read",
-             "--channel", "discord",
-             "--target", f"channel:{channel}",
-             "--limit", str(limit),
-             "--json"],
-            capture_output=True,
-            text=True,
-            timeout=30,  # Allow up to 30s for slow --json reads
-        )
-
-        if result.returncode == 0 and result.stdout:
-            try:
-                data = json.loads(result.stdout)
-                return data.get("payload", {}).get("messages", [])
-            except (json.JSONDecodeError, Exception):
-                pass
-    except subprocess.TimeoutExpired:
-        pass
-
-    return []
-
-
-async def wait_for_user_confirmation(
-    channel_id: str = None,
-    timeout_seconds: float = 600.0,
-) -> bool:
-    """Wait for user to say 'done' in Discord.
-
-    Returns True if user confirmed, False if timeout.
-    Ignores messages from the bot itself.
+    Raises:
+        agent_bridge.AgentBridgeError: when the prompt could not be delivered.
     """
-    channel = channel_id or OSINT_CHANNEL_ID
-    start_time = time.time()
-    poll_interval = 5.0  # seconds between polls (openclaw read is slow)
-
-    while True:
-        elapsed = time.time() - start_time
-
-        # Overall timeout check
-        if elapsed >= timeout_seconds:
-            return False
-
-        # Run Discord read in executor to avoid blocking
-        loop = asyncio.get_running_loop()
-        messages = await loop.run_in_executor(
-            None, _read_messages_sync, channel, 10
-        )
-
-        # Check for "done" from user
-        for msg in messages:
-            author = msg.get("author", {})
-            username = author.get("username", "")
-            if username == BOT_USERNAME:
-                continue
-            content = msg.get("content", "").lower().strip()
-            if content == "done":
-                return True
-
-        # Sleep before next iteration
-        await asyncio.sleep(poll_interval)
+    channel = channel_id or load_channel_id()
+    agent_bridge.send_message(
+        build_captcha_message(vnc_url, url, intervention_type, resume_token),
+        platform=DEFAULT_PLATFORM,
+        conversation=channel,
+    )
 
 
 class CaptchaHandler:
-    """Manages captcha resolution flow across the pipeline."""
+    """Turns a scraper's intervention request into a delivered prompt plus a resume token."""
 
     def __init__(self, discord_channel_id: str = None):
-        self.discord_channel_id = discord_channel_id or OSINT_CHANNEL_ID
+        # Resolved at delivery time, so a broken settings.json is reported as a
+        # delivery failure instead of crashing the pause path.
+        self.discord_channel_id = discord_channel_id
 
-    async def handle_intervention(self, exception, url: str) -> None:
-        """Handle a HumanInterventionNeeded exception.
+    def handle_intervention(self, exception, url: str) -> None:
+        """Deliver the prompt for a HumanInterventionNeeded and hand control back to the agent.
 
-        Sends VNC URL to Discord and waits for user confirmation.
+        A failed delivery does not change the outcome, the run is paused either
+        way, so it is reported on the raised exception instead of replacing it.
+
+        Raises:
+            HumanInterventionPending: always.
         """
-        await send_captcha_to_discord(
-            exception.vnc_url,
-            url,
-            exception.intervention_type,
-            self.discord_channel_id,
+        resume_token = uuid4().hex[:12]
+        delivery_error = None
+
+        try:
+            send_captcha_prompt(
+                exception.vnc_url,
+                url,
+                exception.intervention_type,
+                resume_token,
+                self.discord_channel_id,
+            )
+        except (agent_bridge.AgentBridgeError, OSError, KeyError, ValueError) as exc:
+            delivery_error = str(exc)
+            print(f"[captcha_handler] prompt delivery failed: {exc}", file=sys.stderr)
+
+        raise HumanInterventionPending(
+            resume_token=resume_token,
+            vnc_url=exception.vnc_url,
+            url=url,
+            intervention_type=exception.intervention_type,
+            message=exception.message,
+            delivery_error=delivery_error,
         )
-
-        confirmed = await wait_for_user_confirmation(self.discord_channel_id)
-        if not confirmed:
-            raise CaptchaTimeout(f"User did not resolve captcha for {url}")
-
-
-class CaptchaTimeout(Exception):
-    """Raised when user doesn't resolve captcha within timeout."""
-    pass
 
 
 # Module-level singleton

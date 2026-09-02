@@ -68,6 +68,12 @@ data/
 hermes-config/
 runtime/
 
+# Fork runtime state + scratch (bind-mounted). hermes-data/ holds the live
+# .env and auth.json; the root-anchored `.env` rule above does NOT match
+# hermes-data/.env, so without this pattern COPY . . bakes credentials in.
+hermes-data/
+fork/claw-import/
+
 # ---------- Not needed inside the Docker image ----------
 
 # Desktop app source (Tauri/Electron); never installed in the container.

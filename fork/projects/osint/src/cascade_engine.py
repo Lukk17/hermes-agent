@@ -5,6 +5,7 @@ from typing import Optional
 
 from src.models import OsintQuery, ServiceResult
 from src.connections import Connection
+from src.services.base_service import raise_if_intervention
 from src.services.email_service import EmailService
 from src.services.phone_service import PhoneService
 from src.services.people_service import PeopleService
@@ -194,7 +195,8 @@ class CascadeEngine:
 
             # Run all tasks concurrently for this depth
             if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+                outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+                raise_if_intervention(outcomes)
 
         return self.cascade_results
 
@@ -235,6 +237,7 @@ class CascadeEngine:
             connections=conns,
             passive_data=passive,
         ))
+        raise_if_intervention(results)
 
     async def _search_email(self, email_addr: str, depth: int, email_svc, social, github, company, breach_svc, enrich_svc, spiderfoot_svc, gotools):
         from src.main import run_email_search
@@ -336,7 +339,7 @@ class CascadeEngine:
 
     async def _search_domain(self, domain: str, depth: int, domain_svc, github, gotools_svc):
         results = await domain_svc.search_by_domain(domain)
-        gh_results = await github.search_repos(domain)
+        gh_results = await github.search_by_domain(domain)
         if gh_results:
             results.append(gh_results)
 
@@ -345,7 +348,7 @@ class CascadeEngine:
         from src.services.gotools_service import GoToolsService
         gotools = GoToolsService()
         amass_task = asyncio.create_task(gotools.amass_passive(domain))
-        sf_task = asyncio.create_task(gotools.spiderfoot_domain(domain))
+        sf_task = asyncio.create_task(gotools.subfinder(domain))
         await asyncio.gather(amass_task, sf_task, return_exceptions=True)
 
         conns, passive = self._extract_domain_connections(results)

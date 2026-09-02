@@ -6,30 +6,29 @@ Usage: python3 fear_greed_collector.py
 """
 
 import json
+import sys
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent
-CONFIG_FILE = PROJECT_ROOT / "config" / "settings.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-DATA_DIR = PROJECT_ROOT / "data" / "fear_greed"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+from src import error_collector, load_config  # noqa: E402
+from src.paths import data_subdir  # noqa: E402
 
+DATA_DIR = data_subdir("fear_greed")
 
-def load_config() -> dict:
-    if CONFIG_FILE.exists():
-        return json.loads(CONFIG_FILE.read_text())
-    return {}
+DEFAULT_ENDPOINT = "https://api.alternative.me/fng/?limit=1"
 
 
-CONFIG = load_config()
-API_ENDPOINTS = CONFIG.get("api_endpoints", {})
+def endpoint() -> str:
+    endpoints = load_config().get("api_endpoints", {})
+    return endpoints.get("fear_greed_limit", DEFAULT_ENDPOINT)
 
 
 def fetch_fear_greed() -> dict:
     """Fetch Fear & Greed index from alternative.me."""
-    url = API_ENDPOINTS.get("fear_greed_limit", "https://api.alternative.me/fng/?limit=1")
+    url = endpoint()
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "CryptoMonitor/1.0"})
@@ -44,9 +43,10 @@ def fetch_fear_greed() -> dict:
             "classification": latest["value_classification"],
             "timestamp": latest["timestamp"],
         }
-    except Exception as e:
+    except (OSError, ValueError, KeyError, IndexError) as e:
         error_msg = str(e)
         print(f"[FearGreed] ERROR: {error_msg}")
+        error_collector.add_error("fear_greed", f"{url}: {error_msg}", "error")
         return {
             "status": "error",
             "error": error_msg,
@@ -58,6 +58,8 @@ def fetch_fear_greed() -> dict:
 
 def save(data: dict):
     """Save to files."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     latest_file = DATA_DIR / "fear_greed_latest.json"
     with open(latest_file, "w") as f:
         json.dump(data, f, indent=2)

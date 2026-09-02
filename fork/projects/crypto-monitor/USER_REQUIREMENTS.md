@@ -9,7 +9,14 @@ Last updated: 2026-02-25
 - Always verify changes follow these requirements before running anything
 - ALWAYS answer ALL questions - never ignore any
 
-### Tables (PNG)
+### Tables
+
+Tables are currently sent as TEXT, not as PNGs. Table image rendering was
+removed in a refactor (see the note at the end of `build_charts()` in
+`reports/report_builder.py`), so no `table_*.png` file is produced. The rules
+below are the requirements for table images and apply only if that rendering
+is restored.
+
 - Headers visible (column names like "Coin", "Price", "24h", etc.)
 - NO text inside PNG that belongs in Discord message
 - Title emoji in Discord message, NOT inside table
@@ -32,7 +39,7 @@ Last updated: 2026-02-25
 All sections MUST have emoji header in Discord message:
 1. Prices: "## 💰 Prices"
 2. Top Movers: "## 📈 Top Movers"
-3. Trending Narratives: "## 📰 Trending Narratives"
+3. Trending News: "## 📰 Trending News" (the model-written headline list)
 4. Coin Sentiment: "## 💭 Coin Sentiment"
 5. Market Indicators: "## 📉 Market Indicators"
 6. BTC Dominance: "## 📊 BTC Dominance"
@@ -75,27 +82,75 @@ All sections MUST have emoji header in Discord message:
 #### BTC Dominance Chart
 - Uses matplotlib default sizing (no custom)
 
-### Report Order (23 messages)
-1. # 📊 Daily Crypto Report (title)
-2. timestamp
-3. gauge_fng.png + braille
-4. gauge_cycle.png + braille
-5. gauge_sentiment.png + braille
-6. table_prices.png + braille + ## 💰 Prices
-7. table_movers.png + braille + ## 📈 Top Movers
-8. trending_narratives.png + braille + ## 📰 Trending Narratives
-9. coin_sentiment.png + braille + ## 💭 Coin Sentiment
-10. table_indicators.png + braille + ## 📉 Market Indicators
-11. btc_dominance.png + braille + ## 📊 BTC Dominance
-12. table_sectors.png + braille + ## 🏭 Crypto Sectors
-13. braille + ## ⛽ ETH Gas + text
-14. braille + ## 📊 Market Breadth + text
-15. braille + ## 📈 Spot ETF Flows + text
-16. braille + ## 💵 Stablecoin Supply + text
-17. braille + ## 💰 Funding Rates + text
-18. table_flows.png + ## 🏦 Exchange Holdings
-19. table_whales.png + braille + ## 🐋 Whale Activity
-20. table_airdrops.png + braille + ## 🪂 Airdrops
-21. Airdrop links
-22. braille + ## 📋 Market Summary + content
-23. braille + ## 🔗 Quick Links + links
+### Report Order
+
+Title first, then EVERY chart, then the text sections. The charts lead so the
+graphs are visible without scrolling. This is the delivered order and it is
+fixed: a missing chart or section drops out without shifting anything that
+survives.
+
+**1. Title**
+
+1. `# 📊 Daily Crypto Report` plus the timestamp
+
+**2. Charts, all eight, in this order**
+
+2. gauge_fng.png
+3. gauge_cycle.png
+4. gauge_sentiment.png
+5. trending_narratives.png
+6. coin_sentiment.png
+7. btc_dominance_2y.png
+8. btc_price_2y.png
+9. gas_history_1y.png
+
+**3. Text sections, in this order**
+
+10. Prices
+11. Top Movers
+12. `## 📰 Trending News` (model-written)
+13. Market Indicators
+14. Market Breadth
+15. Crypto Sectors
+16. `## ⛽ ETH Gas`
+17. `## 📈 Spot ETF Flows`
+18. `## 💵 Stablecoin Supply`
+19. `## 💰 Funding Rates`
+20. `## 🏦 Exchange Holdings`
+21. Whale Activity
+22. `## 🪂 Airdrops`
+23. `## 📋 Market Summary` (model-written)
+24. Quick Links
+
+That is 24 messages at most. A typical run delivers about 22, because a couple
+of sections have no data.
+
+Chart files and where they are written. Three are NOT under `data/reports/`:
+
+- `data/reports/gauge_fng.png`
+- `data/reports/gauge_cycle.png`
+- `data/reports/gauge_sentiment.png`
+- `data/reports/trending_narratives.png`
+- `data/reports/coin_sentiment.png`
+- `data/dominance/charts/btc_dominance_2y.png`
+- `data/btc_price/btc_price_2y.png`
+- `data/gas/charts/gas_history_1y.png`
+
+`btc_price_2y.png` and `gas_history_1y.png` are generated every run and are
+delivered, not optional extras. ETH Gas has BOTH a chart in the leading block
+and a text section later.
+
+### Trending Narratives is the chart, Trending News is the list
+
+Two different things that used to share one name:
+
+- **Trending Narratives** is the horizontal bar chart of category counts, `trending_narratives.png`, titled "Trending Narratives" inside the image.
+- **Trending News** is the model-written numbered list of the ten most important headlines, delivered as a text section under `## 📰 Trending News`.
+
+The model-written sections REPLACE their data-rendered counterparts rather than
+sitting beside them: `news_summary.md` replaces the `news` section and
+`market_summary.md` replaces the `summary` section. A curated list next to a raw
+top-ten list is duplication.
+
+Both files hold body text only, with no heading. `reports/report_builder.py`
+supplies the header.

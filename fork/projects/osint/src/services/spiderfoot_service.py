@@ -1,4 +1,5 @@
 from src.models import ServiceResult
+from src.paths import SPIDERFOOT_CLI, SPIDERFOOT_DIR, VENV_PY
 import asyncio
 import concurrent.futures
 import subprocess
@@ -9,9 +10,9 @@ import time
 
 class SpiderFootService:
 
-    _sf_python = "/home/node/.openclaw/workspace/osint/.venv/bin/python3"
-    _sf_cli = "/tmp/spiderfoot/sf.py"
-    _env = {**os.environ, "PYTHONPATH": "/tmp/spiderfoot"}
+    _sf_python = str(VENV_PY)
+    _sf_cli = str(SPIDERFOOT_CLI)
+    _env = {**os.environ, "PYTHONPATH": str(SPIDERFOOT_DIR)}
     _executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="sf")
 
     async def spiderfoot_name_lookup(self, name: str) -> ServiceResult:

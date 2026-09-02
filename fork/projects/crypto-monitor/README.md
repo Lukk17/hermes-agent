@@ -8,11 +8,18 @@ Automated crypto market data collection, analysis, and Discord reporting.
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DAILY PIPELINE                                │
 │                                                                  │
-│  1. REPORT_GENERATOR.PY                                          │
+│  1. scripts/report_generator.py                                  │
 │     └─→ Runs all collectors (prefetch cache first)              │
 │     └─→ Runs all analyzers                                       │
-│     └─→ Generates DAILY_REPORT.PY                                │
-│     └─→ Publishes to Discord via PUBLISH_PIPELINE.SH            │
+│     └─→ Builds report_latest.json + charts                       │
+│                                                                  │
+│  2. freshness check (refuse to publish a stale report)           │
+│                                                                  │
+│  3. scripts/generate_summaries.py                                │
+│     └─→ asks the agent for news_summary.md + market_summary.md   │
+│                                                                  │
+│  4. scripts/post_to_discord.py                                   │
+│     └─→ assembles the fixed sequence and publishes it            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -29,9 +36,9 @@ scripts/report_generator.py (main orchestrator)
     ├─→ ANALYZERS (5 scripts - process and enrich data)
     │   └─→ Saved to data/{category}/*.json
     │
-    └─→ reports/daily_report.py (generates Discord messages)
-        └─→ reports/report_latest.json
-        └─→ reports/discord_messages.json
+    └─→ reports/daily_report.py (generates the report payload)
+        └─→ data/reports/report_latest.json
+        └─→ data/reports/*.png (gauges, tables)
 ```
 
 ## API Keys Required
@@ -46,7 +53,17 @@ environment:
   - CRYPTOPANIC_API_KEY=your_cryptopanic_key
 ```
 
-For local development, create a `.env` file (not committed to git).
+Never create a `.env` file inside this project. Keys reach the container
+process environment from the gitignored repo-root `.env` on the host, wired
+through the `gateway.environment:` block of `docker-compose.override.yml`.
+Code reads them with `os.getenv("KEY")`.
+
+One exception matters for the pipeline. Hermes strips provider and messaging
+credentials from every subprocess it spawns, so `DISCORD_BOT_TOKEN` and
+`MINIMAX_API_KEY` must ALSO be present in `hermes-data/.env`, which every hermes
+child loads at startup. Without that the publish step dies with
+`Platform 'discord' is not configured`. Every other key in this project's list
+survives the strip. Both files are gitignored.
 
 ### Free APIs (no key needed):
 - CoinGecko (rate limited)
@@ -177,8 +194,17 @@ data/
 │   └── simple_*.json
 └── reports/
     ├── report_latest.json          # Full report data
-    └── discord_messages.json        # Formatted Discord messages
+    ├── pipeline_errors_<date>.json # Steps that failed on that run
+    ├── gauge_fng.png
+    ├── gauge_cycle.png
+    ├── gauge_sentiment.png
+    ├── trending_narratives.png
+    └── coin_sentiment.png
 ```
+
+`btc_dominance_2y.png`, `btc_price_2y.png` and `gas_history_1y.png` live under
+`data/dominance/charts/`, `data/btc_price/` and `data/gas/charts/`
+respectively, NOT under `data/reports/`.
 
 ---
 
@@ -251,8 +277,8 @@ Then all collectors share this cache.
 ### `reports/daily_report.py`
 1. Loads all data from `data/*/ *_latest.json`
 2. Generates text sections (indicators, prices, etc.)
-3. Renders chart images (`table_*.png`, `gauge_*.png`)
-4. Saves `discord_messages.json` for publishing
+3. Renders the gauge, narrative and coin-sentiment PNGs into `data/reports/`
+4. Saves `report_latest.json`, which `scripts/post_to_discord.py` turns into the delivery sequence
 
 ### Market Indicators Table (10 items)
 Calculated automatically:
@@ -272,18 +298,34 @@ Calculated automatically:
 ## Running the Pipeline
 
 ### Manual Run
+
+The whole pipeline, exactly as cron runs it:
+
 ```bash
-cd /home/node/.openclaw/workspace/crypto-monitor
-export $(cat .env | grep -v '^#' | xargs)
-python3 scripts/report_generator.py
+cd /opt/projects/crypto-monitor && ./daily_report_pipeline.sh
 ```
 
-### Cron Job
-Runs daily at 10:00 AM UTC:
+That publishes. To rebuild the data without publishing, run the first step alone:
+
 ```bash
-openclaw cron list
-openclaw cron run <job-id>
+cd /opt/projects/crypto-monitor && ./.venv/bin/python scripts/report_generator.py
 ```
+
+Exit codes from the pipeline: `0` published, `2` bad usage or the venv Python is
+missing, `3` the report generator failed, `4` the report was not rewritten this
+run, `5` publishing failed, `6` the summaries could not be written.
+
+### Cron Job
+
+Runs daily at 10:00 UTC as job `crypto-monitor-daily`, with `no_agent: true`, so
+cron runs the script and nothing else.
+
+```bash
+hermes cron list
+```
+
+`hermes cron run crypto-monitor-daily` is NOT a dry run. It fires the real job,
+which publishes to Discord.
 
 ---
 
@@ -300,19 +342,30 @@ crypto-monitor/
 │   ├── reports/          # Generated reports
 │   └── {category}/      # Per-source data
 ├── config/              # Configuration files
-├── .env                 # API keys (not committed)
-└── venv/                # Python environment
+├── pyproject.toml       # Python dependencies
+└── .venv/               # Python environment (gitignored)
 ```
 
 ---
 
 ## Dependencies
 
-Installed in `venv/`:
+`.venv/` is gitignored and is NOT in the image, so it must be built once per
+machine before the pipeline will run at all. Without it the pipeline exits 2.
+
+```bash
+cd /opt/projects/crypto-monitor && uv venv .venv --python python3.11 && uv pip install --python ./.venv/bin/python -e .
+```
+
+Declared in `pyproject.toml`, installed into `.venv/`:
 - matplotlib (charts)
-- pandas (data processing)
-- requests/urllib (API calls)
-- Python 3.11+
+- numpy (data processing)
+- Pillow (image post-processing)
+- urllib from the standard library (API calls)
+
+`requires-python = ">=3.11,<3.12"`. The container's own hermes runtime is
+Python 3.13.5; this project's `.venv/` is independent and is built against
+the pyenv-provided 3.11.
 
 ---
 
@@ -331,5 +384,5 @@ Ensure `whales_latest.json` (not `whale_status_latest.json`) is being written
 ### Report Errors
 Run manually to see specific errors:
 ```bash
-./venv/bin/python3 reports/daily_report.py
+./.venv/bin/python reports/daily_report.py
 ```

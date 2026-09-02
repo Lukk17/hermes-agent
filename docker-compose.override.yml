@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.fork
+      args:
+        BASE_IMAGE: hermes-agent:upstream
+        VCS_REF: ${VCS_REF:-}
+        BUILD_DATE: ${BUILD_DATE:-}
     image: hermes-agent:fork
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -16,17 +20,18 @@ services:
       - ./fork/hermes-config/SOUL.md:/opt/data/SOUL.md
       - ./fork/hermes-config/config.yaml:/opt/data/config.yaml
       - ./fork/hermes-config/cron/jobs.json:/opt/data/cron/jobs.json
+      # cron/scheduler.py refuses any script outside $HERMES_HOME/scripts, and
+      # that dir lives under the gitignored hermes-data mount — track the
+      # wrapper here so it reaches every machine.
+      - ./fork/hermes-config/scripts/crypto-monitor-daily.sh:/opt/data/scripts/crypto-monitor-daily.sh
     environment:
-      - PATH=/opt/data/.local/bin:/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin
+      - PATH=/opt/hermes/bin:/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:/usr/local/bin:/usr/bin:/bin
       # Messaging
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      - DISCORD_ALLOWED_USERS=${DISCORD_ALLOWED_USERS}
-      - DISCORD_HOME_CHANNEL=${DISCORD_HOME_CHANNEL:-}
-      - DISCORD_REQUIRE_MENTION=${DISCORD_REQUIRE_MENTION:-true}
-      - DISCORD_FREE_RESPONSE_CHANNELS=${DISCORD_FREE_RESPONSE_CHANNELS:-}
-      - DISCORD_AUTO_THREAD=${DISCORD_AUTO_THREAD:-false}
+      # Behavioural Discord settings live in config.yaml (discord.*); env wins
+      # over YAML, so passing them here would pin them. This one has no
+      # config.yaml path at all, so it stays.
       - DISCORD_COMMAND_SYNC_POLICY=${DISCORD_COMMAND_SYNC_POLICY:-off}
-      - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
       # Scoped write sandbox. The upstream image bakes in
       # HERMES_WRITE_SAFE_ROOT=/opt/data, but the fork keeps its tracked source
       # under /opt/projects/ (mounted from ./fork/projects on the host). Set the
@@ -38,6 +43,9 @@ services:
       # blocks everything else. To actually allow all writes, set it to "/" or
       # list every directory the agent should be able to write to.
       - HERMES_WRITE_SAFE_ROOT=/opt/data:/opt/projects
+
+      # LLM provider
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
 
       # On-chain
       - BLOCKSCOUT_API_KEY=${BLOCKSCOUT_API_KEY}
@@ -68,15 +76,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.fork
+      args:
+        BASE_IMAGE: hermes-agent:upstream
+        VCS_REF: ${VCS_REF:-}
+        BUILD_DATE: ${BUILD_DATE:-}
     image: hermes-agent:fork-dashboard
     network_mode: host
     depends_on:
       - gateway
-    ports:
-      - "127.0.0.1:9119:9119"
     volumes:
       - ./hermes-data:/opt/data
-      - ./fork/projects:/opt/projects
       # Dashboard reads SOUL.md for the persona banner only; skip skills + cron
       - ./fork/hermes-config/SOUL.md:/opt/data/SOUL.md
-    command: ["dashboard", "--host", "127.0.0.1", "--port", "9119", "--insecure", "--no-open", "--tui"]
+    command: ["dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open"]
+
+  # Builds the upstream image that Dockerfile.fork's BASE_IMAGE points at.
+  # Never started: it exists only to give `docker compose build` a target for
+  # the untouched upstream Dockerfile.
+  upstream-base:
+    profiles: ["build"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hermes-agent:upstream
+    command: ["true"]

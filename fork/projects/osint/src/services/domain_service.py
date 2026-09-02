@@ -1,6 +1,6 @@
 from src.services.base_service import BaseService
 from src.models import ServiceResult
-from src.ascend_client import ascend_client
+from src.ascend_client import HumanInterventionNeeded, ascend_client
 import asyncio
 
 
@@ -44,6 +44,8 @@ class DomainService(BaseService):
             result = await ascend_client.scrape(f"https://{domain}", include_links=True, heavy_mode=True)
             content = result.get("content", "")
             return ServiceResult(source="domain_scrape", success=True, data={"raw_content": content[:3000]})
+        except HumanInterventionNeeded:
+            raise
         except Exception as e:
             return ServiceResult(source="domain_scrape", success=False, error=str(e))
 
@@ -65,6 +67,8 @@ class DomainService(BaseService):
             if task in done:
                 try:
                     results.append(task.result())
+                except HumanInterventionNeeded:
+                    raise
                 except Exception as e:
                     results.append(ServiceResult(source="domain", success=False, error=str(e)))
             else:

@@ -306,6 +306,8 @@ native/fts5_cjk/*.so
 .probe-home/
 
 # Fork-specific (Lukk17 fork)
+.idea/
+.kilo/jetbrains.json
 # hermes-data is runtime state ONLY (state.db, logs/, sessions/, cache/, ...).
 # All tracked configuration lives under fork/hermes-config/ (bind-mounted into
 # the container as file-specific overrides) and fork/projects/ (project
