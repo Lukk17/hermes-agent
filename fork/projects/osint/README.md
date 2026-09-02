@@ -326,6 +326,10 @@ Provided by pyenv inside the container (`PYENV_ROOT=/opt/pyenv`, on `PATH` via
 releases, so do not hardcode a patch number. Build this project's venv against
 3.12: `uv venv .venv --python python3.12`.
 
+Pass that flag every time. `pyproject.toml` declares `requires-python = ">=3.11"`
+with no upper bound, so the project metadata does not pin the interpreter and
+`uv venv` would otherwise be free to pick 3.13.
+
 ### Ascend Web Scraper (PRIMARY SCRAPING TOOL)
 
 `src/ascend_client.py` reads the base URL from the `ASCEND_SCRAPPER_URL`

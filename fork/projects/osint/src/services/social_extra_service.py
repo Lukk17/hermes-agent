@@ -2,6 +2,7 @@ from src.services.base_service import BaseService, raise_if_intervention
 from src.models import ServiceResult
 from src.ascend_client import HumanInterventionNeeded, ascend_client
 import asyncio
+from urllib.parse import quote
 
 
 def normalize_polish(text: str) -> str:
@@ -117,7 +118,7 @@ class SocialExtraService(BaseService):
     async def search_socialsearcher(self, query: str) -> ServiceResult:
         try:
             result = await ascend_client.scrape(
-                    f"https://www.social-searcher.com/search-social/?q={query}&search=people",
+                    f"https://www.social-searcher.com/search-social/?q={quote(query)}&search=people",
                     include_links=True,
                     heavy_mode=True,
             )

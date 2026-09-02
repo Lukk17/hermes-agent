@@ -44,7 +44,7 @@ Source code (tracked):
 
 Runtime state (gitignored via `fork/projects/.gitignore`):
 
-- `.venv/` — Python virtualenv. NOT present in a fresh checkout or in the image; build it once per machine via `uv venv .venv --python python3.12` then `uv pip install --python ./.venv/bin/python -e .`. The hermes runtime is Python 3.13.5; this venv is independent and pyenv supplies 3.12.
+- `.venv/` — Python virtualenv. NOT present in a fresh checkout or in the image; build it once per machine via `uv venv .venv --python python3.12` then `uv pip install --python ./.venv/bin/python -e .`. The hermes runtime is Python 3.13.5; this venv is independent and pyenv supplies 3.12. **Always pass `--python python3.12` explicitly.** `pyproject.toml` declares `requires-python = ">=3.11"` with no upper bound, so the metadata does NOT pin the interpreter and `uv venv` would happily build this project on 3.13. The pin is the only thing keeping it on 3.12. (crypto-monitor is different: its `requires-python` is `>=3.11,<3.12`, which genuinely constrains it.)
 - `data/` — all investigation data, including `data/leaks/`.
 - `logs/` — investigation logs.
 - `*.csv` — ad-hoc exports.

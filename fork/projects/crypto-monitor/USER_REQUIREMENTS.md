@@ -36,24 +36,36 @@ is restored.
 - Links NOT showing Discord preview cards - user will disable in Discord settings
 
 ### Section Headers (in Discord message, NOT in PNG)
-All sections MUST have emoji header in Discord message:
-1. Prices: "## 💰 Prices"
-2. Top Movers: "## 📈 Top Movers"
-3. Trending News: "## 📰 Trending News" (the model-written headline list)
-4. Coin Sentiment: "## 💭 Coin Sentiment"
-5. Market Indicators: "## 📉 Market Indicators"
-6. BTC Dominance: "## 📊 BTC Dominance"
-7. Crypto Sectors: "## 🏭 Crypto Sectors"
-8. ETH Gas: "## ⛽ ETH Gas"
-9. Market Breadth: "## 📊 Market Breadth"
-10. Spot ETF Flows: "## 📈 Spot ETF Flows"
-11. Stablecoin Supply: "## 💵 Stablecoin Supply"
-12. Funding Rates: "## 💰 Funding Rates"
-13. Exchange Holdings: "## 🏦 Exchange Holdings"
-14. Whale Activity: "## 🐋 Whale Activity"
-15. Airdrops: "## 🪂 Airdrops"
-16. Market Summary: "## 📋 Market Summary"
-17. Quick Links: "## 🔗 Quick Links"
+
+NOT every section has a header. Six are headerless BY DESIGN, because they have
+no header to carry an emoji: they render a bare table or a bare list. Do not
+"fix" them by adding one.
+
+Headerless by design:
+
+- Prices (a box table)
+- Top Movers (a box table)
+- Market Indicators (a box table)
+- Market Breadth
+- Crypto Sectors (a box table)
+- Quick Links (four bare URLs, each wrapped in angle brackets)
+
+Sections that DO carry a header, exactly as the renderer emits it:
+
+- `## 📰 Trending News` (model-written, replaces the data-rendered news section)
+- `## ⛽ ETH Gas`
+- `## 📈 Spot ETF Flows`
+- `## 💵 Stablecoin Supply`
+- `## 💰 Funding Rates`
+- `## 🏦 Exchange Holdings`
+- `## 🐋 Known Whales` and `## 🐋 Whale Moves` (the whales section emits both)
+- `## 🪂 Airdrops`
+- `## 📋 Market Summary` (model-written, replaces the data-rendered summary section)
+
+The headers live in the section renderers under `reports/sections/`, except the
+two model-written ones, which `reports/report_builder.py` supplies from
+`MODEL_WRITTEN_SECTIONS`. Nothing downstream adds a header, so a section without
+one in its renderer is delivered without one.
 
 ### Chart/Gauge Settings (EXACT VALUES)
 
@@ -122,8 +134,10 @@ survives.
 23. `## 📋 Market Summary` (model-written)
 24. Quick Links
 
-That is 24 messages at most. A typical run delivers about 22, because a couple
-of sections have no data.
+That is 24 messages at most, and a typical run delivers about 22 because a
+couple of sections have no data on any given day. Which two vary, so the count
+is NOT the contract. The ORDER is: title, then every chart that exists, then
+every text section that has content, each in the sequence above.
 
 Chart files and where they are written. Three are NOT under `data/reports/`:
 

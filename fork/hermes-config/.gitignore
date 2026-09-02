@@ -4,7 +4,8 @@
 !/SOUL.md
 !/config.yaml
 !/cron
-!/cron/**
+/cron/*
+!/cron/jobs.json.example
 !/projects
 !/projects/**
 !/plugins

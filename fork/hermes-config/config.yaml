@@ -317,7 +317,7 @@ discord:
   require_mention: false
   free_response_channels: 1502869491489443901,1543645766076342312,1543645798535794688,1543950705776398378
   allowed_channels: 1502869491489443901,1543645766076342312,1543645798535794688,1543950705776398378
-  auto_thread: true
+  auto_thread: false
   reactions: true
   allow_all_users: true
   channel_prompts:

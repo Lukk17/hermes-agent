@@ -92,8 +92,9 @@ chart or section drops out without shifting anything that survives
 2. Eight charts, in this order: `gauge_fng`, `gauge_cycle`, `gauge_sentiment`, `trending_narratives`, `coin_sentiment`, `btc_dominance`, `btc_price`, `gas_history`.
 3. Up to fifteen text sections: prices, movers, news, indicators, breadth, sectors, gas, etf, stablecoins, funding, flows, whales, airdrops, summary, links.
 
-That is 24 messages at most. A typical run delivers about 22, because a couple of
-sections have no data.
+That is 24 messages at most, and a typical run delivers about 22 because a
+couple of sections have no data on any given day. Which two vary, so the count
+is NOT the contract. The order is.
 
 Chart files, three of which are NOT under `data/reports/`:
 

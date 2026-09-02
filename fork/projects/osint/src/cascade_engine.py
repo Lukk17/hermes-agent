@@ -13,6 +13,7 @@ from src.services.company_service import CompanyService
 from src.services.domain_service import DomainService
 from src.services.github_service import GitHubService
 from src.services.social_service import SocialService
+from src.services.social_extra_service import SocialExtraService
 from src.services.spiderfoot_service import SpiderFootService
 from src.services.breach_service import BreachService
 from src.services.enrichment_service import EnrichmentService
@@ -112,6 +113,7 @@ class CascadeEngine:
         domain_svc = DomainService()
         github_svc = GitHubService()
         social_svc = SocialService()
+        social_extra_svc = SocialExtraService()
         breach_svc = BreachService()
         enrich_svc = EnrichmentService()
         spiderfoot_svc = SpiderFootService()
@@ -148,6 +150,7 @@ class CascadeEngine:
                         current["name"], depth,
                         people_svc, social_svc, github_svc,
                         company_svc, email_svc, spiderfoot_svc,
+                        social_extra_svc,
                     ))
                 elif current.get("email"):
                     tasks.append(self._search_email(
@@ -200,13 +203,13 @@ class CascadeEngine:
 
         return self.cascade_results
 
-    async def _search_name(self, name: str, depth: int, people, social, github, company, email, spiderfoot_svc):
-        # Run all 4 searches concurrently
+    async def _search_name(self, name: str, depth: int, people, social, github, company, email, spiderfoot_svc, social_extra):
         results = await asyncio.gather(
             people.search_by_name(name),
             social.search_by_name(name),
             github.search_users(name),
             spiderfoot_svc.spiderfoot_name_lookup(name),
+            social_extra.search_socialsearcher(name),
             return_exceptions=True,
         )
 
@@ -214,12 +217,15 @@ class CascadeEngine:
         social_results = results[1] if isinstance(results[1], list) else []
         gh_result = results[2] if not isinstance(results[2], Exception) else None
         sf_result = results[3] if not isinstance(results[3], Exception) else None
+        searcher_result = results[4] if not isinstance(results[4], Exception) else None
 
         all_results = list(name_results) + list(social_results)
         if gh_result and gh_result.success and gh_result.data:
             all_results.append(gh_result)
         if sf_result and sf_result.success:
             all_results.append(sf_result)
+        if searcher_result and searcher_result.success:
+            all_results.append(searcher_result)
 
         conns, passive = self._extract_name_connections_from_results(all_results)
         conns = conns[:5]
