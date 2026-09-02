@@ -4,6 +4,10 @@ This fork (a personal instance of [NousResearch/hermes-agent](https://github.com
 
 This file is the entry point. Read it once. Then go to `fork/NOTE-1-install.md` for the install walkthrough.
 
+## Shell variants in this note
+
+Docker and git commands are identical in PowerShell and in a Unix shell, so they appear once, in a block tagged `bash`, and paste unchanged into PowerShell on Windows, into bash or zsh on Linux, and into zsh on macOS. Anything that genuinely differs between the two, file copies, variable assignment, redirection, reading a file, gets one block per shell with a label above it saying which is which. A command that only makes sense on one platform gets a single block and a sentence saying why there is no second variant.
+
 ## The one idea behind the layout
 
 Everything hermes owns lives in one directory on your machine, `hermes-data/`, which is bind-mounted into the container as `/opt/data`. That is the container's home directory, so every file hermes creates, its persona, its memories, its sessions, its logs, its project workspaces, lands back in `hermes-data/` on the host. There is no Docker volume, and nothing is hidden inside the image.
@@ -67,7 +71,7 @@ The dashboard container gets the same `hermes-data` mount and the same read-only
 
 Variables wired in (full list in `docker-compose.override.yml`):
 
-- Discord: `DISCORD_COMMAND_SYNC_POLICY` only. Everything else Discord-related has moved. The bot token lives in `hermes-data/.env`, not in the compose passthrough, because hermes loads that file with `override=True` and an empty compose value would win over the real one. The behavioural settings (`require_mention`, `free_response_channels`, `auto_thread`, `allow_all_users`, `channel_prompts`) live in `hermes-data/config.yaml` under `discord:`.
+- Discord: `DISCORD_COMMAND_SYNC_POLICY` only. Everything else Discord-related has moved. The bot token lives in `hermes-data/.env`, not in the compose passthrough, because hermes strips messaging and provider credentials from every subprocess it spawns, so only that file reaches a cron script shelling out to `hermes send`. Full reasoning in `fork/NOTE-3-discord.md`. The behavioural settings (`require_mention`, `free_response_channels`, `auto_thread`, `allow_all_users`, `channel_prompts`) live in `hermes-data/config.yaml` under `discord:`.
 - On-chain: `BLOCKSCOUT_API_KEY`, `ALCHEMY_API_KEY`, `CRYPTOPANIC_API_KEY`
 - Gmail OAuth: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`
 - OSINT / threat-intel: `HUNTER_API_KEY`, `ABSTRACT_API_KEY`, `EMAILREP_API_KEY`, `NUMVERIFY_API_KEY`, `VIRUSTOTAL_API_KEY`, `URLSCAN_API_KEY`, `OTX_API_KEY`, `ABUSEIPDB_API_KEY`, `CENSYS_API_KEY`, `IPQS_API_KEY`, `DEHASHED_API_KEY`, `BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY`
@@ -81,7 +85,7 @@ The fork wires up the Discord token. You still have to do the Discord Developer 
 
 1. Create an application at [Discord Developer Portal](https://discord.com/developers/applications).
 2. In the `Bot` tab, enable **Privileged Gateway Intents**: `Message Content Intent` and `Server Members Intent`. Save. Without these the bot will be rejected at WebSocket connection time on hermes-agent v0.20.x and later.
-3. In the `Bot` tab, click `Reset Token` to get a fresh token (the token is shown once, copy immediately). Paste it into `hermes-data/.env` as `DISCORD_BOT_TOKEN=`, not into the repo-root `.env`. Hermes loads `hermes-data/.env` last and with override, so a value passed in through compose would be replaced by whatever is in that file.
+3. In the `Bot` tab, click `Reset Token` to get a fresh token (the token is shown once, copy immediately). Paste it into `hermes-data/.env` as `DISCORD_BOT_TOKEN=`, not into the repo-root `.env`, which compose does not forward it from. That file is also the only one a hermes child process can read the token from. See `fork/NOTE-3-discord.md`.
 4. In the `Bot` tab, leave `Requires OAuth2 Code Grant` OFF. That toggle is for OAuth2 user-facing apps, not bots. If it is on, you will see a "You must specify at least one URI" warning and the bot install will fail.
 5. In `OAuth2 > URL Generator`, set `Integration Type` to `Guild Install`, scope `bot` plus `applications.commands`, permissions per `fork/NOTE-3-discord.md`.
 6. Open the generated URL, pick your server, authorize. The bot joins.
@@ -91,35 +95,31 @@ Full guide with screenshots and failure-mode table: see `fork/NOTE-3-discord.md`
 
 ## Bringing it up
 
-```powershell
+```bash
 docker compose config
 ```
 
-```powershell
+```bash
 docker compose --profile build build upstream-base
 ```
 
-```powershell
-docker compose build gateway
+```bash
+docker compose build gateway dashboard
 ```
 
-```powershell
-docker compose build dashboard
-```
-
-```powershell
+```bash
 docker compose up -d
 ```
 
-```powershell
+```bash
 docker compose exec gateway hermes doctor
 ```
 
-```powershell
+```bash
 docker compose exec gateway hermes cron list
 ```
 
-```powershell
+```bash
 docker compose exec gateway ls /opt/data/projects
 ```
 
@@ -137,7 +137,7 @@ Because `hermes-data/` is bind-mounted whole, a file you edit on the host is alr
 
 The recreate command, run from the repo root:
 
-```powershell
+```bash
 docker compose up -d --force-recreate gateway dashboard
 ```
 
@@ -156,16 +156,26 @@ This is the workflow the layout exists for.
 
 On the machine you have been working on, commit whatever hermes changed about itself and push:
 
-```powershell
+```bash
 git add hermes-data
+```
+
+```bash
 git commit -m "state: soul, memories, cron, projects"
+```
+
+```bash
 git push
 ```
 
 On the other machine, pull and bring it up:
 
 ```bash
-git pull && docker compose up -d
+git pull
+```
+
+```bash
+docker compose up -d
 ```
 
 What does not travel, and has to exist on each machine separately: the repo-root `.env` and `hermes-data/.env` (secrets), `hermes-data/auth.json` (OAuth tokens, re-run the login), the per-project `.venv/` directories (rebuild them, see `fork/NOTE-1-install.md`), and the session databases and logs. Everything else, the persona, the memories, the cron schedule and the project workspaces, comes across in the clone.

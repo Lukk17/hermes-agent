@@ -2,6 +2,10 @@ Hermes Agent supports many LLM providers (OpenRouter, Gemini, OpenAI, Ollama, An
 
 The web dashboard at `http://localhost:9119` (or via SSH tunnel from another machine — see fork/NOTE-4-secure-remote-access.md) is the recommended path for adding any provider. The CLI inside the container also works but is more awkward in a Dockerized setup because the OAuth flow defaults to opening a browser the container doesn't have. Treat the CLI as a fallback.
 
+### Shell variants in this note
+
+Docker and git commands are identical in PowerShell and in a Unix shell, so they appear once, in a block tagged `bash`, and paste unchanged into PowerShell on Windows, into bash or zsh on Linux, and into zsh on macOS. Anything that genuinely differs between the two, file copies, variable assignment, redirection, reading a file, gets one block per shell with a label above it saying which is which. A command that only makes sense on one platform gets a single block and a sentence saying why there is no second variant.
+
 ### MiniMax via browser OAuth
 
 First-class support, provider ID `minimax-oauth`. No API key, no credit card.
@@ -53,7 +57,7 @@ Add to `docker-compose.override.yml` under `gateway.environment:`:
 
 Apply the env passthrough:
 
-```powershell
+```bash
 docker compose up -d
 ```
 
@@ -71,7 +75,7 @@ If you really want CLI:
 
 Open an interactive Hermes session (this is the supported flow):
 
-```powershell
+```bash
 docker compose exec -it gateway hermes model
 ```
 
@@ -79,7 +83,7 @@ Pick the provider from the menu, follow the OAuth prompts. For headless/no-brows
 
 For accounts on the China MiniMax platform, the dashboard offers a region selector. CLI equivalent:
 
-```powershell
+```bash
 docker compose exec -it gateway hermes auth add minimax-oauth --no-browser --region cn
 ```
 
@@ -91,7 +95,7 @@ Easiest: dashboard, click the active provider, swap.
 
 CLI equivalent:
 
-```powershell
+```bash
 docker compose exec -it gateway hermes model
 ```
 
@@ -99,7 +103,7 @@ docker compose exec -it gateway hermes model
 
 The dashboard's status page shows the active provider and whether auth is healthy. CLI equivalent:
 
-```powershell
+```bash
 docker compose exec gateway hermes doctor
 ```
 

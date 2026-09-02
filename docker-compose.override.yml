@@ -23,9 +23,11 @@ services:
     environment:
       - PATH=/opt/hermes/bin:/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:/usr/local/bin:/usr/bin:/bin
       # Messaging. DISCORD_BOT_TOKEN and MINIMAX_API_KEY are deliberately NOT
-      # passed: they live only in hermes-data/.env, which hermes loads with
-      # override=True, so a compose passthrough would inject an empty string
-      # over the real value.
+      # passed: they live only in hermes-data/.env, which every hermes process
+      # and every child it spawns re-reads at startup. A passthrough here would
+      # not reach those children anyway, because hermes strips messaging and
+      # provider credentials from subprocess environments. See
+      # fork/NOTE-3-discord.md.
       # Behavioural Discord settings live in config.yaml (discord.*); env wins
       # over YAML, so passing them here would pin them. This one has no
       # config.yaml path at all, so it stays.

@@ -16,7 +16,9 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 ├── docker-compose.yml                 # upstream hermes service definitions
 ├── docker-compose.override.yml        # fork-only overrides (image tags, env passthrough, mounts)
 ├── Dockerfile                         # upstream hermes image build
-├── Dockerfile.fork                    # fork-only chown fix for the dashboard TUI build
+├── Dockerfile.fork                    # fork tools layer on hermes-agent:upstream:
+│                                      #   OSINT apt deps, pyenv + Python 3.11 and 3.12,
+│                                      #   ui-tui chown, /opt/data/.local/bin/hermes symlink
 ├── .gitignore                         # fork additions on top of upstream's
 │
 │   # The repository root IS the hermes-agent checkout. There is no

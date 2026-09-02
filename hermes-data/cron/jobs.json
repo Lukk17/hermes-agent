@@ -13,7 +13,10 @@
       "workdir": "/opt/data/projects/crypto-monitor",
       "next_run_at": "2026-09-03T10:00:00+00:00",
       "schedule_display": "0 10 * * *",
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-09-02T18:15:18.936582+00:00",
+        "by": "docker-desktop:224:d534a89d76b14436b009edd815d9eef5"
+      },
       "last_run_at": "2026-09-02T10:05:33.137768+00:00",
       "last_status": "ok",
       "last_error": null,
@@ -22,5 +25,5 @@
       "state": "scheduled"
     }
   ],
-  "updated_at": "2026-09-02T10:05:33.145555+00:00"
+  "updated_at": "2026-09-02T18:15:18.945784+00:00"
 }

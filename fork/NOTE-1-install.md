@@ -6,6 +6,10 @@ Two files inside that mount are re-mounted read-only on top of it: `hermes-data/
 
 Wherever a path appears in this note, `hermes-data/...` is on your machine and `/opt/...` is inside the container.
 
+### Shell variants in this note
+
+Docker and git commands are identical in PowerShell and in a Unix shell, so they appear once, in a block tagged `bash`, and paste unchanged into PowerShell on Windows, into bash or zsh on Linux, and into zsh on macOS. Anything that genuinely differs between the two, file copies, variable assignment, redirection, reading a file, gets one block per shell with a label above it saying which is which. A command that only makes sense on one platform gets a single block and a sentence saying why there is no second variant.
+
 ### Container user id on a Linux host
 
 Only native Linux passes real file ownership through a bind mount, and this is the one setup step that differs by operating system.
@@ -15,6 +19,8 @@ The container drops to an internal `hermes` user, uid 10000 by default. On nativ
 ```bash
 printf 'HERMES_UID=%s\nHERMES_GID=%s\n' "$(id -u)" "$(id -g)" >> .env
 ```
+
+That block has no PowerShell variant on purpose. It reads the calling user's numeric uid and gid, which Windows does not have, and it is only needed on a host that enforces those ids through a bind mount. Writing a PowerShell version would produce a line nobody should ever add to `.env` on Windows.
 
 On Windows with Docker Desktop this is not needed and was measured not to be: the 9p/drvfs gateway squashes permissions, so uid 10000 writes into `/opt/data` cleanly with nothing set. On macOS with Docker Desktop it is believed not to be needed for the same reason, but that has not been measured. `.env.fork.example` carries a one-command check for the macOS case if you want to confirm it rather than assume it.
 
@@ -47,13 +53,21 @@ This note covers a clean install from zero to working. For day-to-day operations
 
 ### Step 1, copy the env template
 
+PowerShell:
+
 ```powershell
-copy .env.fork.example .env
+Copy-Item .env.fork.example .env
+```
+
+Unix shell:
+
+```bash
+cp .env.fork.example .env
 ```
 
 Open `.env` and fill values. Empty values are passed through harmlessly to the container.
 
-On a Linux host, also append the container user id here now, before the first `up`:
+On a native Linux host, also append the container user id here now, before the first `up`. Linux only, for the reason given above:
 
 ```bash
 printf 'HERMES_UID=%s\nHERMES_GID=%s\n' "$(id -u)" "$(id -g)" >> .env
@@ -61,7 +75,7 @@ printf 'HERMES_UID=%s\nHERMES_GID=%s\n' "$(id -u)" "$(id -g)" >> .env
 
 ### Step 2, fill messaging credentials
 
-The Discord bot token does NOT go in the repo-root `.env`. Hermes loads `hermes-data/.env` last and with override, so a compose passthrough would inject an empty string over the real value. Create or open `hermes-data/.env` (gitignored) and put it there:
+The Discord bot token does NOT go in the repo-root `.env`, and compose does not forward it. It goes in `hermes-data/.env`, because hermes strips messaging and provider credentials from every subprocess it spawns and that file is the one each child re-reads at startup. Full reasoning in `fork/NOTE-3-discord.md`. Create or open `hermes-data/.env` (gitignored) and put it there:
 
 ```
 DISCORD_BOT_TOKEN=<bot-token>
@@ -75,19 +89,15 @@ Blockchain, OSINT, Gmail OAuth, and other skill keys are listed in `.env.fork.ex
 
 ### Step 4, build and start the containers
 
-```powershell
+```bash
 docker compose --profile build build upstream-base
 ```
 
-```powershell
-docker compose build gateway
+```bash
+docker compose build gateway dashboard
 ```
 
-```powershell
-docker compose build dashboard
-```
-
-```powershell
+```bash
 docker compose up -d
 ```
 
@@ -95,7 +105,7 @@ docker compose up -d
 
 Tail the gateway logs:
 
-```powershell
+```bash
 docker compose logs -f gateway
 ```
 
@@ -123,25 +133,53 @@ Required, not optional. `hermes-data/projects/crypto-monitor/.venv/` and
 clone has neither. The crypto-monitor pipeline hard-requires `.venv/bin/python`
 and exits 2 without it, and every osint command runs through its own venv.
 
-```powershell
+```bash
 docker compose exec -u hermes gateway bash -lc "cd /opt/data/projects/crypto-monitor && uv venv .venv --python python3.11 && uv pip install --python ./.venv/bin/python -e ."
 ```
 
-```powershell
+```bash
 docker compose exec -u hermes gateway bash -lc "cd /opt/data/projects/osint && uv venv .venv --python python3.12 && uv pip install --python ./.venv/bin/python -e ."
 ```
+
+The chain inside the quotes runs in the container's bash, not in your shell, so both blocks paste unchanged into PowerShell.
 
 Build them as the `hermes` user, not root, or the venvs land root-owned and the
 supervised gateway cannot use them.
 
 ### Step 7, verify
 
-```powershell
+```bash
 docker compose exec gateway hermes doctor
+```
+
+```bash
 docker compose exec gateway hermes skills list
-docker compose exec gateway ls /opt/data/external-skills | Select-Object -First 3
-docker compose exec gateway ls /opt/data/bundled-skills | Select-Object -First 3
+```
+
+```bash
 docker compose exec gateway ls /opt/data/projects
+```
+
+The two skill listings are long, so trim them on your side of the pipe. That trim is the one thing in this step that differs by shell, because the pipe is consumed by PowerShell or by your Unix shell rather than by the container.
+
+PowerShell:
+
+```powershell
+docker compose exec gateway ls /opt/data/external-skills | Select-Object -First 3
+```
+
+```powershell
+docker compose exec gateway ls /opt/data/bundled-skills | Select-Object -First 3
+```
+
+Unix shell:
+
+```bash
+docker compose exec gateway ls /opt/data/external-skills | head -3
+```
+
+```bash
+docker compose exec gateway ls /opt/data/bundled-skills | head -3
 ```
 
 ### Step 8, open the dashboard

@@ -11,6 +11,12 @@ how to pull the prebuilt image instead of building from source, how to keep
 gotcha, and the optional nginx reverse proxy if you want LAN browser access
 without an SSH tunnel.
 
+### Shell variants in this note
+
+Docker and git commands are identical in PowerShell and in a Unix shell, so they appear once, in a block tagged `bash`, and paste unchanged into PowerShell on Windows, into bash or zsh on Linux, and into zsh on macOS.
+
+Most of the rest of this note runs ON the minipc, in an SSH session, on Debian. Those blocks are Linux commands and deliberately have no PowerShell variant, because there is no Windows shell at the other end of the connection. The two places where a command runs on your own machine instead, the skills sync from `agent-standards` and the SSH tunnel, carry both variants.
+
 ### Repo-as-deployable-unit
 
 The intent of this fork is that the GitHub repo IS the deployable unit: a
@@ -65,13 +71,29 @@ git status hermes-data
 Commit and push them like any other change:
 
 ```bash
-git add hermes-data && git commit -m "state: soul, memories, cron" && git push
+git add hermes-data
+```
+
+```bash
+git commit -m "state: soul, memories, cron"
+```
+
+```bash
+git push
 ```
 
 On the minipc:
 
 ```bash
-cd /opt/hermes-fork && git pull && docker compose up -d
+cd /opt/hermes-fork
+```
+
+```bash
+git pull
+```
+
+```bash
+docker compose up -d
 ```
 
 The gateway comes back with the same persona, the same memories, the same cron
@@ -100,8 +122,9 @@ Verify the VM has a real LAN IP:
 
 ```bash
 ip -4 addr show | grep -E 'inet '
-# expect something like 192.168.1.42/24 on the same subnet as your laptop
 ```
+
+Expect something like `192.168.1.42/24` on the same subnet as your laptop. This runs on the minipc, so there is no PowerShell variant.
 
 ### Files to copy to the minipc
 
@@ -117,18 +140,31 @@ needs:
 
 That is it. No rsync, no source tree, no `.venv`, no `node_modules`.
 
-Bootstrap on a fresh minipc:
+Bootstrap on a fresh minipc. Every block below runs on the minipc over SSH, so
+each one is Linux-only:
 
 ```bash
-sudo apt update && sudo apt install -y docker.io docker-compose-plugin git
+sudo apt update
 ```
 
 ```bash
-sudo mkdir -p /opt/hermes-fork && sudo chown $USER:$USER /opt/hermes-fork
+sudo apt install -y docker.io docker-compose-plugin git
 ```
 
 ```bash
-cd /opt/hermes-fork && git clone https://github.com/Lukk17/hermes-agent.git .
+sudo mkdir -p /opt/hermes-fork
+```
+
+```bash
+sudo chown $USER:$USER /opt/hermes-fork
+```
+
+```bash
+cd /opt/hermes-fork
+```
+
+```bash
+git clone https://github.com/Lukk17/hermes-agent.git .
 ```
 
 ```bash
@@ -136,9 +172,9 @@ cp .env.fork.example .env
 ```
 
 Fill in the API keys in `.env`. The Discord bot token does not belong here, it
-goes in `hermes-data/.env`, because hermes loads that file last and with
-override and would replace a compose-supplied value with whatever it finds
-there.
+goes in `hermes-data/.env`, because hermes strips messaging and provider
+credentials from every subprocess it spawns and that file is the one each child
+re-reads at startup. Full reasoning in `fork/NOTE-3-discord.md`.
 
 Then pin the container's user id to yours. This matters on the minipc and not
 on a Windows dev box, because native Linux is the only host that passes real
@@ -146,8 +182,11 @@ file ownership through a bind mount. The container drops to an internal
 `hermes` user, uid 10000 by default; if that uid does not own the checkout,
 every write the agent makes under `/opt/data` fails with EACCES, which covers
 `SOUL.md`, the memories, the cron jobs and every project file. Compose cannot
-run a shell, so it cannot work this out for itself. Run this once, from the
-repo root, and compose reads `.env` on every `up` from then on:
+run a shell, so it cannot work this out for itself. This one is Linux-only in a
+stronger sense than the rest of the note: it reads the calling user's numeric
+uid and gid, which Windows does not have, so there is no PowerShell version
+worth writing. Run it once, from the repo root, and compose reads `.env` on
+every `up` from then on:
 
 ```bash
 printf 'HERMES_UID=%s\nHERMES_GID=%s\n' "$(id -u)" "$(id -g)" >> .env
@@ -169,7 +208,7 @@ docker compose -f docker-compose.yml -f docker-compose.minipc.yml pull
 docker compose -f docker-compose.yml -f docker-compose.minipc.yml up -d
 ```
 
-Every later `docker compose` command on the minipc needs the same `-f` pair. Export it once per shell to avoid repeating it:
+Every later `docker compose` command on the minipc needs the same `-f` pair. Export it once per shell to avoid repeating it. `export` is a Unix shell builtin and this shell is on the minipc, so there is no PowerShell variant:
 
 ```bash
 export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
@@ -240,26 +279,62 @@ sync automatically.
 
 For skills that already exist locally, update in place from
 agent-standards master. Source path matches destination path, so the
-original (correct) git checkout command works without gymnastics:
+original (correct) git checkout command works without gymnastics. This one
+runs on your own machine, in the repo checkout, not on the minipc, so it gets
+both variants.
+
+PowerShell:
 
 ```powershell
-foreach ($d in Get-ChildItem -Directory .agents/skills) {
-  git checkout agent-standards/master -- ".agents/skills/$($d.Name)/" 2>$null
-}
+foreach ($d in Get-ChildItem -Directory .agents/skills) { git checkout agent-standards/master -- ".agents/skills/$($d.Name)/" 2>$null }
+```
+
+Unix shell:
+
+```bash
+for d in .agents/skills/*/; do git checkout agent-standards/master -- "$d" 2>/dev/null; done
 ```
 
 This overwrites local files with the upstream version. It only updates
 skills that already exist locally. New skills in `agent-standards` are NOT
 pulled. To add a brand new skill, use `git archive` plus `tar` with
 `--strip-components` to relocate the tree from `.agents/skills/<new>/` to
-the destination:
+the destination. Also on your own machine, so both variants again.
+
+PowerShell:
 
 ```powershell
-$tmp = "C:\Windows\Temp\new-skill.tar"
-git archive agent-standards/master ".agents/skills/<new-skill-name>" -o $tmp
+git archive agent-standards/master ".agents/skills/<new-skill-name>" -o "$env:TEMP\new-skill.tar"
+```
+
+```powershell
 New-Item -ItemType Directory -Force ".agents/skills/<new-skill-name>"
-tar -xf $tmp -C ".agents/skills/<new-skill-name>" --strip-components=3
-Remove-Item $tmp -Force
+```
+
+```powershell
+tar -xf "$env:TEMP\new-skill.tar" -C ".agents/skills/<new-skill-name>" --strip-components=3
+```
+
+```powershell
+Remove-Item "$env:TEMP\new-skill.tar" -Force
+```
+
+Unix shell:
+
+```bash
+git archive agent-standards/master ".agents/skills/<new-skill-name>" -o /tmp/new-skill.tar
+```
+
+```bash
+mkdir -p ".agents/skills/<new-skill-name>"
+```
+
+```bash
+tar -xf /tmp/new-skill.tar -C ".agents/skills/<new-skill-name>" --strip-components=3
+```
+
+```bash
+rm -f /tmp/new-skill.tar
 ```
 
 After either operation, no container restart is needed. Hermes rescans
@@ -327,7 +402,11 @@ bind mount is needed: the directory is already inside the `/opt/data` mount.
 ### Bring it up
 
 ```bash
-cd /opt/hermes-fork && export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+cd /opt/hermes-fork
+```
+
+```bash
+export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
 ```
 
 ```bash
@@ -363,8 +442,9 @@ From your laptop, SSH tunnel (recommended):
 
 ```bash
 ssh -L 9119:localhost:9119 user@<minipc-lan-ip>
-# then open http://localhost:9119 in your laptop browser
 ```
+
+Then open `http://localhost:9119` in the browser on your laptop. This block runs on your laptop rather than on the minipc, and `ssh` is the same command in PowerShell on Windows, in bash or zsh on Linux, and in zsh on macOS, so one block covers all three.
 
 ### LAN access without SSH (nginx, since you already run it)
 
@@ -408,6 +488,9 @@ Create the htpasswd file (one-time, replace `you`):
 
 ```bash
 sudo apt install apache2-utils
+```
+
+```bash
 sudo htpasswd -c /etc/nginx/.htpasswd you
 ```
 
@@ -422,7 +505,14 @@ Enable and reload:
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/hermes.conf /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
+```
+
+```bash
+sudo nginx -t
+```
+
+```bash
+sudo systemctl reload nginx
 ```
 
 Open `http://hermes.local` from the laptop. nginx prompts for the basic-auth
@@ -462,7 +552,11 @@ automation.
 After you push a new build to Docker Hub from the dev box:
 
 ```bash
-cd /opt/hermes-fork && export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+cd /opt/hermes-fork
+```
+
+```bash
+export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
 ```
 
 ```bash

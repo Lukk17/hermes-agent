@@ -2,6 +2,10 @@ The Hermes Agent dashboard has no built-in authentication. Anyone who can reach 
 
 This fork's approach: don't expose the dashboard. Publish it only to `127.0.0.1:9119` on the host. For remote access, tunnel through SSH.
 
+### Shell variants in this note
+
+The only command in this note is `ssh`, and it is identical in PowerShell on Windows (the built-in OpenSSH client), in bash or zsh on Linux, and in zsh on macOS. It appears once, in a block tagged `bash`, and pastes unchanged into any of them.
+
 ### Network layout
 
 | Service | Network mode | Listener | Who can reach it |
@@ -31,7 +35,7 @@ No auth, no tunnel — the loopback bind is the security boundary.
 
 From your laptop, with the Hermes host accessible via SSH:
 
-```powershell
+```bash
 ssh -L 9119:localhost:9119 <user>@<host>
 ```
 

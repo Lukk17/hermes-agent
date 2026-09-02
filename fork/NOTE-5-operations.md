@@ -1,42 +1,55 @@
 Day-to-day operations against a working Hermes Agent install. Assumes fork/NOTE-1-install.md has been followed and containers are up.
 
+### Shell variants in this note
+
+Docker and git commands are identical in PowerShell and in a Unix shell, so they appear once, in a block tagged `bash`, and paste unchanged into PowerShell on Windows, into bash or zsh on Linux, and into zsh on macOS. Anything that genuinely differs between the two, file copies, variable assignment, redirection, reading a file, gets one block per shell with a label above it saying which is which. A command that only makes sense on one platform gets a single block and a sentence saying why there is no second variant.
+
 ### Container lifecycle
 
 Start everything in the background:
 
-```powershell
+```bash
 docker compose up -d
 ```
 
 Stop everything (containers removed, volumes kept):
 
-```powershell
+```bash
 docker compose down
 ```
 
 Stop without removing containers (faster restart):
 
-```powershell
+```bash
 docker compose stop
 ```
 
 Bring stopped containers back without rebuilding:
 
-```powershell
+```bash
 docker compose start
 ```
 
 Restart a single service:
 
-```powershell
+```bash
 docker compose restart gateway
+```
+
+```bash
 docker compose restart dashboard
 ```
 
 Recreate a service (forces re-read of env, override, and command changes):
 
-```powershell
+```bash
 docker compose up -d --force-recreate gateway
+```
+
+Recreate everything, which is the usual move after editing `config.yaml`, `docker-compose.override.yml` or `.env`:
+
+```bash
+docker compose up -d --force-recreate
 ```
 
 A recreate is not needed for most edits. `./hermes-data/` on the host is mounted whole at `/opt/data` in the container, so a file you save on the host is already changed inside the container. What you actually need per file:
@@ -49,8 +62,11 @@ A recreate is not needed for most edits. `./hermes-data/` on the host is mounted
 
 ### Logs
 
-```powershell
+```bash
 docker compose logs -f gateway
+```
+
+```bash
 docker compose logs --tail 50 dashboard
 ```
 
@@ -62,21 +78,27 @@ Those two read the container's stdout. The persistent logs are ordinary files on
 
 Interactive Hermes CLI inside the gateway:
 
-```powershell
+```bash
 docker compose exec -it gateway hermes
 ```
 
 Raw bash shell:
 
-```powershell
+```bash
 docker compose exec -it gateway bash
 ```
 
 One-off Hermes subcommands:
 
-```powershell
+```bash
 docker compose exec gateway hermes doctor
+```
+
+```bash
 docker compose exec gateway hermes skills list
+```
+
+```bash
 docker compose exec gateway hermes cron list
 ```
 
@@ -84,33 +106,55 @@ docker compose exec gateway hermes cron list
 
 `Dockerfile.fork` takes a `BASE_IMAGE` build arg, defaulting to `hermes-agent:upstream`. That tag is produced by the build-only `upstream-base` service, which builds the untouched upstream `Dockerfile`. Build it first:
 
-```powershell
+```bash
 docker compose --profile build build upstream-base
 ```
 
-After that, `gateway` and `dashboard` both build from `Dockerfile.fork` on top of that base and are independent of each other, so their order does not matter.
+After that, `gateway` and `dashboard` both build from `Dockerfile.fork` on top of that base and are independent of each other, so their order does not matter, and one `docker compose build gateway dashboard` covers both.
 
 ### Updating to the latest upstream
 
 See `fork/NOTE-7-updating-from-upstream.md` for the full procedure. Short form:
 
-```powershell
+```bash
 git fetch upstream --tags
+```
+
+```bash
 git checkout master
+```
+
+```bash
 git rebase v<TAG>
+```
+
+```bash
 docker compose --profile build build upstream-base
-docker compose build gateway
-docker compose build dashboard
+```
+
+```bash
+docker compose build gateway dashboard
+```
+
+```bash
 docker compose up -d --force-recreate gateway dashboard
 ```
 
 ### Full clean rebuild (clear start)
 
-```powershell
+```bash
 docker compose down
+```
+
+```bash
 docker compose --profile build build --no-cache upstream-base
-docker compose build --no-cache gateway
-docker compose build --no-cache dashboard
+```
+
+```bash
+docker compose build --no-cache gateway dashboard
+```
+
+```bash
 docker compose up -d
 ```
 
@@ -132,7 +176,7 @@ Add a passthrough line in `docker-compose.override.yml` under `gateway.environme
 
 Recreate the gateway so it picks up the new env passthrough:
 
-```powershell
+```bash
 docker compose up -d --force-recreate gateway
 ```
 
@@ -142,7 +186,7 @@ Drop a new folder under `.agents/skills/` with a `SKILL.md` (YAML frontmatter: `
 
 The container reads `.agents/skills/` from `/opt/data/external-skills/` (read-only bind mount). `hermes-data/config.yaml` already lists `/opt/data/external-skills` in `skills.external_dirs`. The skill appears in the next session. Force a rescan without restarting:
 
-```powershell
+```bash
 docker compose exec gateway hermes skills reload
 ```
 
@@ -164,7 +208,7 @@ model:
 
 Then recreate, because the file is read once at startup and is read-only inside the container:
 
-```powershell
+```bash
 docker compose up -d --force-recreate gateway dashboard
 ```
 
@@ -174,8 +218,11 @@ docker compose up -d --force-recreate gateway dashboard
 
 If MiniMax or Anthropic OAuth fails with `refresh_token_reused`, `invalid_grant`, or "not logged in":
 
-```powershell
+```bash
 docker compose exec -it gateway hermes auth add minimax-oauth --no-browser
+```
+
+```bash
 docker compose exec -it gateway hermes auth add anthropic --type oauth
 ```
 
@@ -185,13 +232,15 @@ Config, persona, cron jobs, memories and project workspaces are tracked in git, 
 
 What git does not cover is the untracked half of `./hermes-data/`: `state.db` and `sessions/` (conversation history), `auth.json` (OAuth tokens), `kanban.db`, `.env`, and the logs. One copy of the whole directory catches both halves.
 
-Windows (dev box):
+This is one of the few commands with no shared form, because the copy tool differs per platform.
+
+PowerShell on Windows:
 
 ```powershell
 robocopy .\hermes-data .\hermes-data-backup /MIR
 ```
 
-Linux (minipc):
+Unix shell on Linux or macOS:
 
 ```bash
 rsync -a --delete ./hermes-data/ ./hermes-data-backup/

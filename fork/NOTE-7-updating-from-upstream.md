@@ -2,6 +2,12 @@
 
 This note describes how to pull the latest upstream code into this fork, resolve conflicts, rebuild the Docker images, tag them, and push to Docker Hub. The workflow mirrors what `NOTE-6-minipc-proxmox.md` does for deployments, but for source-level syncs.
 
+## Shell variants in this note
+
+Docker and git commands are identical in PowerShell and in a Unix shell, so they appear once, in a block tagged `bash`, and paste unchanged into PowerShell on Windows, into bash or zsh on Linux, and into zsh on macOS. That covers nearly every command here.
+
+The exception is the image tag in step 6, which is held in a shell variable, and variable assignment is the one piece of syntax the two shells do not share. That step carries a block per shell. The blocks in step 7 run on the minipc over SSH and are Linux-only, which is stated where they appear.
+
 ## Branches in this fork
 
 | Branch | Purpose | Workflow |
@@ -36,19 +42,21 @@ Docker Hub the gateway repository was `lukk17/hermes-agent`, now
 
 ## Pre-flight
 
-```powershell
-# Verify the upstream remote exists
-git remote -v
-# expect: upstream  https://github.com/NousResearch/hermes-agent.git  (fetch)
-#          upstream  https://github.com/NousResearch/hermes-agent.git  (push)
+Verify the upstream remote exists:
 
-# If upstream is missing:
+```bash
+git remote -v
+```
+
+Expect two lines for `upstream`, a fetch and a push, both pointing at `https://github.com/NousResearch/hermes-agent.git`. If `upstream` is missing, add it:
+
+```bash
 git remote add upstream https://github.com/NousResearch/hermes-agent.git
 ```
 
 If you forked your repository directly from `NousResearch/hermes-agent`, `origin` already points to upstream. Add your own fork as `origin` and use `upstream` for the NousResearch one if needed:
 
-```powershell
+```bash
 git remote set-url origin https://github.com/Lukk17/hermes-agent.git
 ```
 
@@ -56,9 +64,15 @@ git remote set-url origin https://github.com/Lukk17/hermes-agent.git
 
 ### 1. Sync metadata, list available tags
 
-```powershell
+```bash
 git fetch upstream
+```
+
+```bash
 git fetch upstream --tags
+```
+
+```bash
 git tag -l "v20*" --sort=-v:refname
 ```
 
@@ -80,8 +94,11 @@ Pick the one you want to consume. The date format embedded in the tag is `vYYYY.
 
 ### 2. Switch to master and rebase onto the chosen tag
 
-```powershell
+```bash
 git checkout master
+```
+
+```bash
 git rebase v2026.8.27
 ```
 
@@ -109,40 +126,52 @@ For each file flagged by git, decide one of:
 
 After each file:
 
-```powershell
+```bash
 git add resolved-path
+```
+
+```bash
 git rebase --continue
 ```
 
 If you get stuck at any point:
 
-```powershell
-git rebase --abort    # back to where you started
-git rebase --skip     # drop the upstream commit entirely (last resort)
+Back to where you started:
+
+```bash
+git rebase --abort
+```
+
+Drop the upstream commit entirely, a last resort:
+
+```bash
+git rebase --skip
 ```
 
 ### 4. Sanity-check the resolved tree
 
-```powershell
-git diff --stat upstream/v2026.8.27..master
-# expect: only the fork-specific files differ
+Expect only the fork-specific files to differ:
 
-git diff upstream/v2026.8.27..master -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/
-# eyeball each diff to confirm overrides and NOTES still make sense with new upstream base
+```bash
+git diff --stat v2026.8.27..master
 ```
+
+Then eyeball each diff to confirm the overrides and the notes still make sense against the new upstream base:
+
+```bash
+git diff v2026.8.27..master -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/
+```
+
+The revision is the bare tag `v2026.8.27`, not `upstream/v2026.8.27`. Tags are not namespaced per remote the way branches are, so the `upstream/` form fails with an unknown-revision error.
 
 ### 5. Build the images
 
-```powershell
+```bash
 docker compose --profile build build upstream-base
 ```
 
-```powershell
-docker compose build gateway
-```
-
-```powershell
-docker compose build dashboard
+```bash
+docker compose build gateway dashboard
 ```
 
 Build order matters only for the first command: `upstream-base` produces
@@ -151,39 +180,51 @@ Build order matters only for the first command: `upstream-base` produces
 
 ### 6. Tag and push to Docker Hub
 
+Hold the tag in a shell variable. This is the one command in the note whose syntax differs between the two shells.
+
+PowerShell:
+
 ```powershell
 $tag = "v2026.8.27-lukk"
 ```
 
-```powershell
+Unix shell:
+
+```bash
+tag="v2026.8.27-lukk"
+```
+
+Every `docker tag` and `docker push` below reads it as `$tag`, which expands the same way in both shells, so those blocks are shared.
+
+```bash
 docker tag hermes-agent:fork lukk17/hermes-agent-gateway:$tag
 ```
 
-```powershell
+```bash
 docker tag hermes-agent:fork lukk17/hermes-agent-gateway:latest
 ```
 
-```powershell
+```bash
 docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:$tag
 ```
 
-```powershell
+```bash
 docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:latest
 ```
 
-```powershell
+```bash
 docker push lukk17/hermes-agent-gateway:$tag
 ```
 
-```powershell
+```bash
 docker push lukk17/hermes-agent-gateway:latest
 ```
 
-```powershell
+```bash
 docker push lukk17/hermes-agent-dashboard:$tag
 ```
 
-```powershell
+```bash
 docker push lukk17/hermes-agent-dashboard:latest
 ```
 
@@ -194,14 +235,20 @@ fork-built image carries two Docker Hub tags. Use the versioned one
 
 ### 7. Update the minipc to consume the new image
 
-On the dev box the minipc pulls from:
+Open a session on the minipc. `ssh` is the same command in PowerShell and in a Unix shell:
 
 ```bash
 ssh user@minipc
 ```
 
+Everything from here to the end of this step runs inside that SSH session, on Debian, so those blocks are Linux-only and have no PowerShell variant:
+
 ```bash
-cd /opt/hermes-fork && export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+cd /opt/hermes-fork
+```
+
+```bash
+export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
 ```
 
 ```bash
@@ -296,30 +343,49 @@ If you start with a fork that pre-dates the `master`/tag workflow above (this fo
 
 ### Path 1 — keep what you have, tag the current state
 
-```powershell
+```bash
 git checkout master
-git tag v2026.5.11-lukk fc94e319d10a4852c856dd617af4b7f8981ff5d6
-# build, push, and treat v2026.5.11-lukk as your first "release"
 ```
+
+```bash
+git tag v2026.5.11-lukk fc94e319d10a4852c856dd617af4b7f8981ff5d6
+```
+
+Then build and push as in steps 5 and 6, and treat `v2026.5.11-lukk` as your first release.
 
 This locks the fork state to the day the workflow was introduced. Future updates rebase onto upstream release tags from this baseline; the rebase deltas are then bounded by however many upstream commits land between the new tag and the current baseline.
 
 ### Path 2 — fresh re-fork from the latest tag
 
-```powershell
+```bash
 git checkout v2026.8.27
-git checkout -b master
-# port the fork-specific files from the old branch manually:
-git checkout <old-master> -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/ .agents/skills/
-# commit
-git add -A
-git commit -m "feat(fork): re-fork on v2026.8.27 baseline"
-# build and push as above
 ```
+
+```bash
+git checkout -b master
+```
+
+Port the fork-specific files over from the old branch:
+
+```bash
+git checkout <old-master> -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/ .agents/skills/
+```
+
+```bash
+git add -A
+```
+
+```bash
+git commit -m "feat(fork): re-fork on v2026.8.27 baseline"
+```
+
+Then build and push as in steps 5 and 6.
 
 This skips the painful rebase. Future cycles are short.
 
 ## Quick reference card
+
+A reference listing, not a paste-in-one-go block. Each line has its own copyable block in the step above it, and the `v<TAG>` placeholders have to be filled in anyway.
 
 ```
 # fetch
@@ -333,8 +399,7 @@ git rebase v<TAG>
 
 # build + tag + push
 docker compose --profile build build upstream-base
-docker compose build gateway
-docker compose build dashboard
+docker compose build gateway dashboard
 docker tag hermes-agent:fork           lukk17/hermes-agent-gateway:v<TAG>-lukk
 docker tag hermes-agent:fork           lukk17/hermes-agent-gateway:latest
 docker tag hermes-agent:fork-dashboard lukk17/hermes-agent-dashboard:v<TAG>-lukk
