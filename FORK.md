@@ -4,18 +4,35 @@ This fork (a personal instance of [NousResearch/hermes-agent](https://github.com
 
 This file is the entry point. Read it once. Then go to `fork/NOTE-1-install.md` for the install walkthrough.
 
+## The one idea behind the layout
+
+Everything hermes owns lives in one directory on your machine, `hermes-data/`, which is bind-mounted into the container as `/opt/data`. That is the container's home directory, so every file hermes creates, its persona, its memories, its sessions, its logs, its project workspaces, lands back in `hermes-data/` on the host. There is no Docker volume, and nothing is hidden inside the image.
+
+Git decides which of those files travel between machines. `.gitignore` ignores `hermes-data/*` and then re-includes exactly the pieces worth carrying: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, and `scripts/crypto-monitor-daily.sh`. Databases, logs, caches, OAuth tokens and `hermes-data/.env` stay on the machine that made them.
+
+That is what makes the intended workflow work. Use hermes on one machine, let it update its own SOUL and memories as it goes, `git commit` and `git push`. On the other machine, `git pull` and `docker compose up -d`, and the same persona, memories, cron jobs and projects are there with no setup step.
+
+One exception to hermes writing whatever it likes: `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh` are re-mounted read-only on top of the read-write parent. Hermes cannot rewrite them at runtime. To change either one, edit the file on the host and recreate the container.
+
+Whenever a path appears below, `hermes-data/...` and anything else without a leading `/opt` is on your machine, and `/opt/...` is inside the container.
+
 ## What is added by this fork
 
 | File or directory | Purpose |
 |---|---|
-| `docker-compose.override.yml` | Auto-merged on top of upstream `docker-compose.yml`. Adds file-specific bind mounts for `./fork/hermes-config/SOUL.md`, `config.yaml`, `cron/jobs.json` at `/opt/data/...`; `./fork/projects:/opt/projects` for project workspaces; `.agents/skills:/opt/external-skills:ro` and `./skills:/opt/skills:ro` for skill discovery; env passthrough for messaging and OSINT keys; the dashboard loopback bind on `127.0.0.1:9119`; the `Dockerfile.fork` build for both services with `BASE_IMAGE=hermes-agent:upstream`; and the build-only `upstream-base` service that produces that base image. |
+| `docker-compose.override.yml` | Auto-merged on top of upstream `docker-compose.yml`. Points `/opt/data` at `./hermes-data` instead of upstream's `~/.hermes`; re-mounts `./hermes-data/config.yaml` and `./hermes-data/scripts/crypto-monitor-daily.sh` read-only on top of it; adds `.agents/skills:/opt/data/external-skills:ro` and `./skills:/opt/data/bundled-skills:ro` for skill discovery; sets `HERMES_SKIP_CONFIG_MIGRATION=1` so the boot hook does not try to rewrite the read-only config; env passthrough for on-chain and OSINT keys; the dashboard loopback bind on `127.0.0.1:9119`; the `Dockerfile.fork` build for both services with `BASE_IMAGE=hermes-agent:upstream`; and the build-only `upstream-base` service that produces that base image. |
 | `Dockerfile.fork` | The fork's tools image, built on `BASE_IMAGE` (default `hermes-agent:upstream`, produced from the untouched upstream `Dockerfile`). Adds OSINT apt dependencies, pyenv with Python 3.11 (crypto-monitor) and 3.12 (osint), `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the dashboard's UI dist, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Used by BOTH the gateway and the dashboard service. |
 | `.env` (gitignored) | Local-only secrets and tokens. Auto-loaded by Docker Compose for variable substitution in `docker-compose.override.yml`. |
-| `fork/hermes-config/` | Tracked fork-specific config (formerly lived in `hermes-data/`). Contains `SOUL.md` (persona), `config.yaml` (runtime config), `cron/jobs.json` (scheduled jobs). File-specific bind mounts shadow the same paths inside the container at `/opt/data/`. Rebase onto upstream hermes never conflicts with this directory because upstream does not ship it. |
-| `fork/projects/` | Tracked project workspaces. One subdirectory per Discord channel. Mounted at `/opt/projects/` inside the container. Each subdir has its own `.venv/` (with leading dot, gitignored), `AGENTS.md`, source code. Currently: `crypto-monitor/`, `osint/`, `research/`. |
-| `.agents/skills/` | Curated fork-authored skill set (33 skills), mirrored from `Lukk17/agent-standards/.agents/skills/`. Read-only mount at `/opt/external-skills/`. Listed in `fork/hermes-config/config.yaml` under `skills.external_dirs`. |
-| `./skills/` | Bundled hermes skills (16 skills, hermes-shipped). Read-only mount at `/opt/skills/`. Listed in `fork/hermes-config/config.yaml` under `skills.external_dirs`. |
-| `hermes-data/` (gitignored) | Runtime state ONLY. Contains `state.db` (SQLite sessions), `auth.json` (OAuth tokens), `logs/`, `sessions/`, `cache/`, `memories/` (MEMORY.md, USER.md). Rebase does not touch this directory because it is entirely gitignored. |
+| `hermes-data/` | The whole of hermes' home directory, mounted at `/opt/data` in the container. Holds tracked config and untracked runtime state side by side. Upstream does not ship this directory, so a rebase never conflicts with it. |
+| `hermes-data/config.yaml` (tracked) | Runtime config: model, provider, `skills.external_dirs`, Discord channel prompts. Re-mounted READ-ONLY in the container, so hermes cannot rewrite it. Edit on the host, recreate to apply. |
+| `hermes-data/SOUL.md` (tracked) | Agent persona. Writable at runtime, so hermes can update its own SOUL and the change lands on the host ready to commit. |
+| `hermes-data/cron/jobs.json` (tracked) | Scheduled jobs. Writable at runtime; `hermes cron` edits it in place. |
+| `hermes-data/memories/*.md` (tracked) | `MEMORY.md` and `USER.md`, the memory subsystem's own files. Writable at runtime, tracked so memories follow you to the other machine. |
+| `hermes-data/projects/` (tracked) | Project workspaces, one subdirectory per Discord channel. Reachable at `/opt/data/projects/` in the container. Each subdir has its own `.venv/` (with leading dot, gitignored, built once per machine), `AGENTS.md`, source code. Currently: `crypto-monitor/`, `osint/`, `research/`. |
+| `hermes-data/scripts/crypto-monitor-daily.sh` (tracked) | The cron job's entry point. Re-mounted READ-ONLY, same recreate-to-change rule as `config.yaml`. |
+| everything else in `hermes-data/` (ignored) | `state.db` (SQLite sessions), `auth.json` (OAuth tokens), `.env` (secrets hermes child processes read), `logs/`, `sessions/`, `cache/`, lock files. Per-machine, never committed. |
+| `.agents/skills/` | Curated fork-authored skill set, mirrored from `Lukk17/agent-standards/.agents/skills/`. Read-only mount at `/opt/data/external-skills/`. Listed in `hermes-data/config.yaml` under `skills.external_dirs`. |
+| `./skills/` | Bundled hermes skills, shipped by upstream. Read-only mount at `/opt/data/bundled-skills/`. Listed in `hermes-data/config.yaml` under `skills.external_dirs`. |
 | `fork/AGENTS.md` | Coding agent guide for the fork overlay (Kilo / Claude Code / OpenCode / Copilot / Cursor). Imported from `.claude/CLAUDE.md`. |
 | `fork/NOTE-*.md` | Reference docs for this fork. Install, Discord, operations, minipc, updating from upstream. Read `fork/NOTE-1-install.md` first. |
 | `.claude/CLAUDE.md` | Claude Code entry point. `@`-imports `../AGENTS.md` (upstream) and `../fork/AGENTS.md` (fork overlay). |
@@ -23,21 +40,24 @@ This file is the entry point. Read it once. Then go to `fork/NOTE-1-install.md` 
 
 ## How the mount layout works
 
-Three mount layers on the gateway container:
+Left of the arrow is a path on your machine, relative to the repo root. Right of the arrow is where it appears inside the container.
 
 ```
-./hermes-data/                          -> /opt/data/                       (runtime state, RW)
-./fork/projects/                        -> /opt/projects/                   (project workspaces, RW)
-./.agents/skills/                       -> /opt/external-skills/             (curated skills, RO)
-./skills/                               -> /opt/skills/                     (bundled skills, RO)
+./hermes-data/              -> /opt/data                        everything, read-write
+./.agents/skills/           -> /opt/data/external-skills        curated skills, read-only
+./skills/                   -> /opt/data/bundled-skills         upstream skills, read-only
 
-# File-specific overrides that shadow paths inside /opt/data/
-./fork/hermes-config/SOUL.md            -> /opt/data/SOUL.md                 (agent persona)
-./fork/hermes-config/config.yaml        -> /opt/data/config.yaml             (runtime config)
-./fork/hermes-config/cron/jobs.json    -> /opt/data/cron/jobs.json         (scheduled jobs)
+# re-mounted read-only on top of the read-write parent
+./hermes-data/config.yaml   -> /opt/data/config.yaml
+./hermes-data/scripts/crypto-monitor-daily.sh
+                            -> /opt/data/scripts/crypto-monitor-daily.sh
 ```
 
-The dashboard container has the same hermes-data and fork/projects mounts plus SOUL.md (for the persona banner). It does NOT need skills, cron, or fork/hermes-config beyond SOUL.md.
+`SOUL.md`, `cron/jobs.json`, `memories/` and `projects/` need no mount line of their own. They are already inside `hermes-data/`, which is mounted whole, so they appear at `/opt/data/SOUL.md`, `/opt/data/cron/jobs.json`, `/opt/data/memories/` and `/opt/data/projects/` and hermes can write to all of them.
+
+The container's home directory is `/opt/data`, set by the upstream image at `Dockerfile:386` (`ENV HERMES_HOME=/opt/data`). The same image already restricts agent writes to that tree at `Dockerfile:387` (`ENV HERMES_WRITE_SAFE_ROOT=/opt/data`). Since everything the fork cares about now lives under `/opt/data`, that default is already correct and the compose file sets no override for it.
+
+The dashboard container gets the same `hermes-data` mount and the same read-only `config.yaml`. It does not mount the two skills directories, because only the gateway loads skills.
 
 ## How the credentials wiring works
 
@@ -47,7 +67,7 @@ The dashboard container has the same hermes-data and fork/projects mounts plus S
 
 Variables wired in (full list in `docker-compose.override.yml`):
 
-- Discord: `DISCORD_BOT_TOKEN`, `DISCORD_ALLOWED_USERS`, `DISCORD_HOME_CHANNEL`, `DISCORD_REQUIRE_MENTION`, `DISCORD_FREE_RESPONSE_CHANNELS`, `DISCORD_AUTO_THREAD`, `DISCORD_COMMAND_SYNC_POLICY`, `GATEWAY_ALLOW_ALL_USERS`
+- Discord: `DISCORD_COMMAND_SYNC_POLICY` only. Everything else Discord-related has moved. The bot token lives in `hermes-data/.env`, not in the compose passthrough, because hermes loads that file with `override=True` and an empty compose value would win over the real one. The behavioural settings (`require_mention`, `free_response_channels`, `auto_thread`, `allow_all_users`, `channel_prompts`) live in `hermes-data/config.yaml` under `discord:`.
 - On-chain: `BLOCKSCOUT_API_KEY`, `ALCHEMY_API_KEY`, `CRYPTOPANIC_API_KEY`
 - Gmail OAuth: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`
 - OSINT / threat-intel: `HUNTER_API_KEY`, `ABSTRACT_API_KEY`, `EMAILREP_API_KEY`, `NUMVERIFY_API_KEY`, `VIRUSTOTAL_API_KEY`, `URLSCAN_API_KEY`, `OTX_API_KEY`, `ABUSEIPDB_API_KEY`, `CENSYS_API_KEY`, `IPQS_API_KEY`, `DEHASHED_API_KEY`, `BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY`
@@ -61,11 +81,11 @@ The fork wires up the Discord token. You still have to do the Discord Developer 
 
 1. Create an application at [Discord Developer Portal](https://discord.com/developers/applications).
 2. In the `Bot` tab, enable **Privileged Gateway Intents**: `Message Content Intent` and `Server Members Intent`. Save. Without these the bot will be rejected at WebSocket connection time on hermes-agent v0.20.x and later.
-3. In the `Bot` tab, click `Reset Token` to get a fresh token (the token is shown once, copy immediately). Paste into `.env` as `DISCORD_BOT_TOKEN=`.
+3. In the `Bot` tab, click `Reset Token` to get a fresh token (the token is shown once, copy immediately). Paste it into `hermes-data/.env` as `DISCORD_BOT_TOKEN=`, not into the repo-root `.env`. Hermes loads `hermes-data/.env` last and with override, so a value passed in through compose would be replaced by whatever is in that file.
 4. In the `Bot` tab, leave `Requires OAuth2 Code Grant` OFF. That toggle is for OAuth2 user-facing apps, not bots. If it is on, you will see a "You must specify at least one URI" warning and the bot install will fail.
 5. In `OAuth2 > URL Generator`, set `Integration Type` to `Guild Install`, scope `bot` plus `applications.commands`, permissions per `fork/NOTE-3-discord.md`.
 6. Open the generated URL, pick your server, authorize. The bot joins.
-7. Get your Discord user ID (Settings > Advanced > Developer Mode, then right-click your name > Copy User ID) and put it in `DISCORD_ALLOWED_USERS`. Without this the gateway denies all users. Set `GATEWAY_ALLOW_ALL_USERS=true` to skip the per-user check.
+7. Decide who may talk to the bot, in `hermes-data/config.yaml` under `discord:`. Either set `allow_all_users: true`, or list your own Discord user ID under `allowed_users` (Settings > Advanced > Developer Mode, then right-click your name > Copy User ID). Without one of the two the gateway denies every sender. This fork ships `allow_all_users: true`.
 
 Full guide with screenshots and failure-mode table: see `fork/NOTE-3-discord.md`.
 
@@ -100,7 +120,7 @@ docker compose exec gateway hermes cron list
 ```
 
 ```powershell
-docker compose exec gateway ls /opt/projects
+docker compose exec gateway ls /opt/data/projects
 ```
 
 `upstream-base` builds the untouched upstream `Dockerfile` into `hermes-agent:upstream`, the base both fork images sit on. It is a build-only service and never runs.
@@ -109,13 +129,19 @@ The dashboard listens on `127.0.0.1:9119` of the host by default. For remote acc
 
 ## After editing fork files
 
-In-container files do not survive a recreate. The general protocol:
+Because `hermes-data/` is bind-mounted whole, a file you edit on the host is already changed inside the container the moment you save it. Whether that is enough depends on the file.
 
-1. Identify the file path on the host (e.g. `fork/hermes-config/config.yaml`).
-2. Tell the user: "Open `<path>`. Change line N from X to Y. Save. Then run `docker compose up -d --force-recreate gateway dashboard` from the repo root."
-3. Wait for the user to confirm.
+- `hermes-data/SOUL.md`, `cron/jobs.json`, `memories/*.md`, anything under `projects/`: no recreate. The next session or the next cron tick reads the new content.
+- `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh`: recreate. Config is read once at startup, and both files are read-only inside the container so nothing can pick up a change on its own.
+- `docker-compose.override.yml`, `Dockerfile.fork`, `.env`: recreate, and rebuild for `Dockerfile.fork`.
 
-The agent does NOT edit these files itself and does NOT recreate the container itself. Both are user actions. See `fork/AGENTS.md` for the full editing protocol.
+The recreate command, run from the repo root:
+
+```powershell
+docker compose up -d --force-recreate gateway dashboard
+```
+
+A coding agent does NOT recreate the container itself. It says which file to change and whether a recreate is needed, then waits. See `fork/AGENTS.md` for the full editing protocol.
 
 ## What is NOT in scope for this fork
 
@@ -124,13 +150,24 @@ The agent does NOT edit these files itself and does NOT recreate the container i
 - A web UI for the projects directories. Project workspaces are file-system-only. Operate through `git`, `docker compose exec`, and the hermes agent itself.
 - Re-bundling upstream hermes source into a single image. We use the upstream source via `hermes-agent:upstream` plus the fork's tools layer and runtime overrides. No forks of the Python source are maintained.
 
-## Migration from earlier fork versions
+## Moving the setup to another machine
 
-Earlier versions of this fork (before `v2026.5.29.2` rebase) used `my-skills/` instead of `.agents/skills/`, and put config files in `hermes-data/`. The current structure was finalized in commit `b7c6df52a1` and earlier. If you are coming from an older fork branch, the migration steps are:
+This is the workflow the layout exists for.
 
-1. `mv my-skills .agents/skills`
-2. Move `hermes-data/SOUL.md`, `hermes-data/config.yaml`, `hermes-data/cron/jobs.json`, `hermes-data/.gitignore` to `fork/hermes-config/`. Drop the old `hermes-data/.gitignore` whitelist. `hermes-data/` is now runtime state only.
-3. Update `docker-compose.override.yml` to add the file-specific bind mounts for the three config files.
-4. Recreate the gateway. Skills, config, cron all load from the new paths.
+On the machine you have been working on, commit whatever hermes changed about itself and push:
 
-See `fork/NOTE-7-updating-from-upstream.md` for the full rebase procedure.
+```powershell
+git add hermes-data
+git commit -m "state: soul, memories, cron, projects"
+git push
+```
+
+On the other machine, pull and bring it up:
+
+```bash
+git pull && docker compose up -d
+```
+
+What does not travel, and has to exist on each machine separately: the repo-root `.env` and `hermes-data/.env` (secrets), `hermes-data/auth.json` (OAuth tokens, re-run the login), the per-project `.venv/` directories (rebuild them, see `fork/NOTE-1-install.md`), and the session databases and logs. Everything else, the persona, the memories, the cron schedule and the project workspaces, comes across in the clone.
+
+See `fork/NOTE-6-minipc-proxmox.md` for the Linux side of this, including the one command that makes the container's user id match the host file owner, and `fork/NOTE-7-updating-from-upstream.md` for the rebase procedure.

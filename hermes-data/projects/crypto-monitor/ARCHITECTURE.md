@@ -237,7 +237,7 @@ All history files use the same format:
 ### 1. Cron triggers at 10:00 UTC
 ```
 Cron → /opt/data/scripts/crypto-monitor-daily.sh (wrapper)
-         → /opt/projects/crypto-monitor/daily_report_pipeline.sh
+         → /opt/data/projects/crypto-monitor/daily_report_pipeline.sh
 ```
 
 The job is `no_agent: true` with no `deliver` and no `prompt`. Cron runs the
@@ -372,4 +372,4 @@ not exist.
 - **Report Time:** Daily 10:00 UTC (cron entry `crypto-monitor-daily`)
 - **Braille Blank:** \u2800 (for empty lines)
 - **External seam:** `services/agent_bridge.py` - external-process calls only (Discord gateway); no Python-library wrappers here
-- **Cron Job ID:** see `fork/hermes-config/cron/jobs.json`
+- **Cron Job ID:** see `hermes-data/cron/jobs.json`

@@ -76,29 +76,29 @@ No free tier. Options:
 
 ```bash
 # Amass — passive subdomain enum
-/opt/projects/osint/bin/amass enum -passive -silent -d example.com -o /tmp/amass_out.txt
+/opt/data/projects/osint/bin/amass enum -passive -silent -d example.com -o /tmp/amass_out.txt
 
 # Subfinder — fast subdomain discovery
-HOME=/tmp /opt/projects/osint/bin/subfinder -d example.com -silent -sources publicwww -o /tmp/sf_out.txt
+HOME=/tmp /opt/data/projects/osint/bin/subfinder -d example.com -silent -sources publicwww -o /tmp/sf_out.txt
 
 # httpx — HTTP probing
-echo "http://example.com" > /tmp/hosts.txt && /opt/projects/osint/bin/httpx -list /tmp/hosts.txt -silent
+echo "http://example.com" > /tmp/hosts.txt && /opt/data/projects/osint/bin/httpx -list /tmp/hosts.txt -silent
 
 # Mosint — email OSINT (needs config at $HOME/.mosint.yaml; HOME is /opt/data)
-/opt/projects/osint/bin/mosint test@gmail.com -s -o /tmp/out.json
+/opt/data/projects/osint/bin/mosint test@gmail.com -s -o /tmp/out.json
 
 # Naabu — port scan
-/opt/projects/osint/bin/naabu -host example.com -silent -rate 100
+/opt/data/projects/osint/bin/naabu -host example.com -silent -rate 100
 ```
 
 ## theHarvester Usage
 ```bash
-PYTHONPATH=/opt/projects/osint/theHarvester /opt/projects/osint/.venv/bin/python /opt/projects/osint/theHarvester/bin/theHarvester -d example.com -b duckduckgo -f /tmp/out.json
+PYTHONPATH=/opt/data/projects/osint/theHarvester /opt/data/projects/osint/.venv/bin/python /opt/data/projects/osint/theHarvester/bin/theHarvester -d example.com -b duckduckgo -f /tmp/out.json
 ```
 
 ## Recon-ng Usage
 ```bash
-PYTHONPATH=/tmp/recon-ng /opt/projects/osint/.venv/bin/python /tmp/recon-ng/recon-cli
+PYTHONPATH=/tmp/recon-ng /opt/data/projects/osint/.venv/bin/python /tmp/recon-ng/recon-cli
 ```
 
 recon-ng is not vendored in this repo and `/tmp/recon-ng` does not exist in a

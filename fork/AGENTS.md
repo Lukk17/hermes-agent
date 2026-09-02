@@ -40,33 +40,39 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 ├── scripts/ tests/ tests-js/ website/ docs/ evals/ native/ nix/ locales/
 │                                      # upstream, all of it
 │
-├── fork/                              # everything fork-specific lives here
+├── fork/                              # fork documentation only, nothing the container reads
 │   ├── AGENTS.md                      # this file (coding agent guide for the fork overlay)
-│   ├── projects/                      # project workspaces mounted into the hermes container
-│   │   ├── AGENTS.md                  # shared hermes-runtime conventions
-│   │   ├── AGENTS.user.md             # (optional) private user notes, never read by hermes
-│   │   ├── crypto-monitor/            # one Discord channel worth of project
-│   │   ├── osint/                     # one Discord channel worth of project
-│   │   └── research/                  # one Discord channel worth of project
-│   ├── hermes-config/                 # tracked hermes config (file-specific bind mounts)
-│   │   ├── SOUL.md                    # agent persona
-│   │   ├── config.yaml                # runtime config
-│   │   └── cron/jobs.json             # scheduled jobs
 │   └── NOTE-*.md                      # fork docs
 │
-├── hermes-data/                       # runtime state ONLY (gitignored)
-│   ├── state.db*                      # SQLite sessions
-│   ├── auth.json                      # OAuth tokens
-│   ├── logs/                          # gateway / agent / skill logs
-│   ├── sessions/                      # additional SQLite files
-│   ├── skills/                        # bundled skills installed at runtime
-│   ├── memories/                      # MEMORY.md, USER.md (memory subsystem)
-│   └── cache/                         # model catalog cache
+├── hermes-data/                       # the container's whole home directory, mounted at /opt/data
+│   │                                  # TRACKED (travels between machines):
+│   ├── config.yaml                    #   runtime config, re-mounted read-only in the container
+│   ├── SOUL.md                        #   agent persona, hermes may rewrite it at runtime
+│   ├── cron/jobs.json                 #   scheduled jobs
+│   ├── memories/*.md                  #   MEMORY.md, USER.md
+│   ├── projects/                      #   project workspaces, one subdir per Discord channel
+│   │   ├── AGENTS.md                  #     shared hermes-runtime conventions
+│   │   ├── AGENTS.user.md             #     (optional) private user notes, never read by hermes
+│   │   ├── crypto-monitor/            #     one Discord channel worth of project
+│   │   ├── osint/                     #     one Discord channel worth of project
+│   │   └── research/                  #     one Discord channel worth of project
+│   ├── scripts/crypto-monitor-daily.sh  # cron entry point, re-mounted read-only
+│   │                                  # IGNORED (per-machine, never enters git):
+│   ├── .env                           #   secrets that hermes child processes need
+│   ├── state.db*                      #   SQLite sessions
+│   ├── auth.json                      #   OAuth tokens
+│   ├── logs/  sessions/  cache/       #   logs, session files, model catalog cache
+│   ├── skills/                        #   skills installed at runtime
+│   └── ...                            #   everything else under hermes-data/ is ignored
 │
 └── .agents/skills/                    # curated user-authored skills (mirror of agent-standards)
 ```
 
-The fork overlay is everything under `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, `.gitignore` additions, and `hermes-data/` runtime state. The rest is upstream hermes-agent code that we do not modify.
+The rule that makes this layout readable: `hermes-data/` is the container's home directory, bind-mounted whole at `/opt/data`. There is no Docker volume and no per-file mount of a config directory. `.gitignore` is what decides which files inside that one directory travel between machines: it ignores `hermes-data/*` and then re-includes `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, and `scripts/crypto-monitor-daily.sh`. So the agent writes wherever it likes under its own home, and git picks up only the parts worth carrying to another machine.
+
+Two files inside that mount are re-mounted read-only on top of it, `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh`. A running hermes cannot rewrite either one. Changing them means editing the host file and recreating the container.
+
+The fork overlay is everything under `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, `.gitignore` additions, `FORK.md`, and the tracked files inside `hermes-data/`. The rest is upstream hermes-agent code that we do not modify.
 
 ## Engineering principles for the fork
 
@@ -102,7 +108,7 @@ These apply to every code change the fork makes. They restate the user's global 
 - Heartbeat: conversational batched periodic checks, drift-tolerant, fewer API calls. Used for things like email/calendar/social background checks.
 - Cron: exact timing, isolated session, different model/thinking, one-shot, direct-to-channel delivery. Used for scheduled reports, batch investigations.
 
-Hermes uses cron (`fork/hermes-config/cron/jobs.json`), NOT heartbeat. Do not invent heartbeats inside hermes.
+Hermes uses cron (`hermes-data/cron/jobs.json`), NOT heartbeat. Do not invent heartbeats inside hermes.
 
 ## Confirmation protocol (no silent edits)
 
@@ -117,10 +123,12 @@ Hermes uses cron (`fork/hermes-config/cron/jobs.json`), NOT heartbeat. Do not in
 
 | Change | Edit |
 |---|---|
-| Cron schedule for a project | `fork/hermes-config/cron/jobs.json` |
-| Discord channel persona | `fork/hermes-config/config.yaml` under `discord.channel_prompts` plus `discord.free_response_channels` / `discord.allowed_channels` |
-| Agent persona / SOUL | `fork/hermes-config/SOUL.md` |
-| Per-project conventions | `fork/projects/<name>/AGENTS.md` (and per-project docs in the same dir) |
+| Cron schedule for a project | `hermes-data/cron/jobs.json` |
+| Discord channel persona | `hermes-data/config.yaml` under `discord.channel_prompts` plus `discord.free_response_channels` / `discord.allowed_channels` |
+| Agent persona / SOUL | `hermes-data/SOUL.md` |
+| Per-project conventions | `hermes-data/projects/<name>/AGENTS.md` (and per-project docs in the same dir) |
+| Cron entry-point script | `hermes-data/scripts/crypto-monitor-daily.sh` (read-only inside the container, so a recreate is required) |
+| Agent memory | `hermes-data/memories/MEMORY.md` and `USER.md`. Hermes writes these itself at runtime, they are tracked, so commit them like any other change |
 | Skills catalog | `.agents/skills/<skill>/SKILL.md` (mirrored from `Lukk17/agent-standards/.agents/skills/` via `git checkout agent-standards/master -- ".agents/skills/<skill>/"`) |
 | Docker compose / image | `docker-compose.override.yml` plus `Dockerfile.fork` |
 | Fork docs | `fork/NOTE-*.md` (one per topic: install, operations, minipc, updating, discord) |
@@ -130,19 +138,19 @@ Hermes uses cron (`fork/hermes-config/cron/jobs.json`), NOT heartbeat. Do not in
 
 - `AGENTS.md` at repo root: upstream hermes-agent guide. Do not modify.
 - Everything at the repository root that is not fork-owned is upstream code, because the repository root IS the hermes-agent checkout. There is no `hermes-agent/` subdirectory to fence off. Concretely, do not patch: every top-level `*.py` (`run_agent.py`, `cli.py`, `model_tools.py`, `toolsets.py`, `hermes_constants.py`, `hermes_state*.py`, `utils.py`, `batch_runner.py`, `mcp_serve.py`, `setup.py`, and the rest), nor `agent/`, `gateway/`, `tools/`, `hermes_cli/`, `cron/`, `tui_gateway/`, `acp_adapter/`, `plugins/`, `providers/`, `skills/`, `optional-skills/`, `optional-mcps/`, `web/`, `ui-tui/`, `apps/`, `website/`, `docs/`, `scripts/`, `tests/`, `tests-js/`, `evals/`, `native/`, `nix/`, `locales/`, `docker/`, `assets/`, `contributors/`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `uv.lock`. Rebasing onto upstream merges their changes; we do not patch them in place unless the fork is the only way.
-- Fork-owned, and therefore editable: `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, the fork's additions to `.gitignore`, `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`, `FORK.md`, and the gitignored `hermes-data/` runtime state.
-- Anything inside `hermes-data/` runtime state: that is bind-mounted from the host for hermes runtime. Runtime data lives there. The tracked files that USED to be in hermes-data/ are now in `fork/hermes-config/` and bind-mounted into the container at the same paths.
-- `hermes-data/state.db*`: SQLite session files. Never commit.
-- `hermes-data/auth.json`: OAuth tokens. Never commit.
-- `hermes-data/memories/MEMORY.md` and `USER.md`: per-machine memory. Default to gitignored unless explicitly tracked.
+- Fork-owned, and therefore editable: `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, the fork's additions to `.gitignore`, `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`, `FORK.md`, and the tracked files inside `hermes-data/`.
+- `hermes-data/` is not a fenced-off directory any more. It is the container's home directory and it holds both tracked config and untracked runtime state side by side. Which is which is decided by `.gitignore`, not by the directory name, so check `git status` before assuming a file there is throwaway.
+- Tracked and editable inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, and `scripts/crypto-monitor-daily.sh`.
+- Ignored, and never to be committed or hand-edited: `hermes-data/state.db*` (SQLite sessions), `hermes-data/auth.json` (OAuth tokens), `hermes-data/.env` (secrets that hermes child processes read), and every log, cache, lock and session file beside them.
+- `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh` are re-mounted read-only inside the container. Hermes cannot rewrite them at runtime, and `HERMES_SKIP_CONFIG_MIGRATION=1` stops the boot hook trying. Edit them on the host and recreate the container.
 
 ### Editing protocol
 
-1. Identify the file path on the host (e.g. `fork/hermes-config/config.yaml`).
+1. Identify the file path on the host (e.g. `hermes-data/config.yaml`).
 2. Identify the exact line(s) and value(s) to change.
 3. Tell the user: "Open `<path>`. Change line N from X to Y. Save." or do the edit yourself via `Write` / `Edit` tool if the user has authorized the change.
-4. If the change is in a file the container reads at runtime (anything in `fork/hermes-config/` or `fork/projects/`), the container will pick up the change on its next restart. Tell the user to run `docker compose up -d --force-recreate gateway dashboard` from the repo root.
-5. Wait for the user to confirm the edit landed and the recreate happened. Do NOT recreate the container yourself. Do NOT modify container-side files; always edit the host-side source.
+4. `hermes-data/` is bind-mounted whole, so a host-side edit is visible inside the container the moment it is saved. A recreate is needed only when the change is one the running process will not re-read: `config.yaml` (read once at startup, and read-only in the container), `scripts/crypto-monitor-daily.sh` (same), or anything in `docker-compose.override.yml` / `.env`. Say which of the two cases applies rather than reflexively asking for a recreate.
+5. When a recreate is needed, tell the user to run `docker compose up -d --force-recreate gateway dashboard` from the repo root, then wait for them to confirm. Do NOT recreate the container yourself. Do NOT modify container-side files under `/opt/data`; always edit the host-side file in `hermes-data/`.
 
 ### Rebasing onto upstream hermes
 
@@ -166,7 +174,7 @@ Conflicts will appear in files the fork actually modifies. Expected conflict fil
 Files that should NOT conflict because the fork's modifications live elsewhere:
 
 - Anything under `fork/` (we own this namespace)
-- `hermes-data/` (gitignored, never conflicts)
+- `hermes-data/` (upstream does not ship this directory, so its tracked files replay cleanly and its ignored files are invisible to git)
 - `.agents/skills/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/` (fork AI tooling, not upstream)
 
 See `fork/NOTE-7-updating-from-upstream.md` for the full procedure including image tag rename, build, push, and minipc pull.
@@ -177,9 +185,9 @@ This fork uses a layered AGENTS.md convention:
 
 - `AGENTS.md` (repo root): upstream hermes-agent coding agent guide. Read first.
 - `fork/AGENTS.md` (this file): fork-specific overlay for the coding agent. Read second.
-- `fork/projects/AGENTS.md`: shared runtime conventions for the hermes agent. Read when working on project files.
-- `fork/projects/<name>/AGENTS.md`: per-project conventions. Read when working in a specific project.
-- `fork/projects/AGENTS.user.md` (per project, optional): private user notes. Never read by the hermes agent. Read only if the user references it explicitly.
+- `hermes-data/projects/AGENTS.md`: shared runtime conventions for the hermes agent. Read when working on project files.
+- `hermes-data/projects/<name>/AGENTS.md`: per-project conventions. Read when working in a specific project.
+- `hermes-data/projects/AGENTS.user.md` (per project, optional): private user notes. Never read by the hermes agent. Read only if the user references it explicitly.
 
 ## Communication
 
@@ -193,6 +201,6 @@ This fork uses a layered AGENTS.md convention:
 ## What this file is NOT
 
 - It is not a replacement for the upstream `AGENTS.md`. Read both.
-- It is not a config file. Persistent settings live in `fork/hermes-config/config.yaml` and similar.
-- It is not a cron schedule. Cron jobs go in `fork/hermes-config/cron/jobs.json`.
-- It is not the hermes agent's instructions inside the container. Those are at `fork/projects/AGENTS.md` and per-project AGENTS.md files.
+- It is not a config file. Persistent settings live in `hermes-data/config.yaml` and similar.
+- It is not a cron schedule. Cron jobs go in `hermes-data/cron/jobs.json`.
+- It is not the hermes agent's instructions inside the container. Those are at `hermes-data/projects/AGENTS.md` and per-project AGENTS.md files.

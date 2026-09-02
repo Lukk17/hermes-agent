@@ -1,6 +1,6 @@
 # Crypto Monitor project conventions
 
-This file is read by the hermes agent when its working directory is `/opt/projects/crypto-monitor/`. It layers on top of `/opt/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
+This file is read by the hermes agent when its working directory is `/opt/data/projects/crypto-monitor/`. It layers on top of `/opt/data/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
 
 ## Skill usage in this project
 
@@ -20,7 +20,7 @@ Run `skills list` mentally before each turn and pull in every skill that fits.
 
 Source code (tracked):
 
-- `daily_report_pipeline.sh` — runs `scripts/report_generator.py` (collectors + analyzers + chart generation). Outputs `data/reports/report_latest.json` plus the chart PNGs listed under "Daily report workflow". **Paths inside this script are hardcoded to `/opt/projects/crypto-monitor/`**, the container layout.
+- `daily_report_pipeline.sh` — runs `scripts/report_generator.py` (collectors + analyzers + chart generation). Outputs `data/reports/report_latest.json` plus the chart PNGs listed under "Daily report workflow". **Paths inside this script are hardcoded to `/opt/data/projects/crypto-monitor/`**, the container layout.
 - `scripts/report_generator.py` — runs prefetch, collectors, analyzers, then the report builder. Writes `data/reports/report_latest.json` and the chart PNGs.
 - `scripts/generate_summaries.py` — calls the agent twice through the seam and writes `data/reports/news_summary.md` and `data/reports/market_summary.md`.
 - `scripts/post_to_discord.py` — assembles the fixed message sequence and publishes it. This is the pipeline's final step, not something the agent runs.
@@ -37,7 +37,7 @@ Source code (tracked):
 - `ARCHITECTURE.md` — full data flow diagram and caching strategy.
 - `TODO.md` — pending work.
 
-Runtime state (gitignored via `fork/projects/.gitignore`):
+Runtime state (gitignored via `hermes-data/projects/.gitignore`):
 
 - `.venv/` — Python virtualenv (with leading dot, gitignored). Built once per machine via `uv venv .venv --python python3.11` then `uv pip install --python ./.venv/bin/python -e .`.
 - `data/reports/` — generated report payload plus the gauge, narrative and coin-sentiment PNGs.
@@ -131,7 +131,7 @@ Keyless (used directly by collectors):
 
 ## Schedule
 
-Cron entry `crypto-monitor-daily` in `fork/hermes-config/cron/jobs.json`
+Cron entry `crypto-monitor-daily` in `hermes-data/cron/jobs.json`
 (bind-mounted at `/opt/data/cron/jobs.json`) fires daily at 10:00 UTC, cron
 expression `0 10 * * *`, container timezone UTC.
 
@@ -142,8 +142,8 @@ no agent turn in the scheduled path at all.
 The `script` field is the bare basename `crypto-monitor-daily.sh`, and it
 resolves through a two-file pair:
 
-- `fork/hermes-config/scripts/crypto-monitor-daily.sh` is a small wrapper, bind-mounted at `/opt/data/scripts/crypto-monitor-daily.sh`. It does nothing but `exec bash /opt/projects/crypto-monitor/daily_report_pipeline.sh`.
-- `fork/projects/crypto-monitor/daily_report_pipeline.sh` is the real pipeline.
+- `hermes-data/scripts/crypto-monitor-daily.sh` on the host is a small wrapper. It does nothing but `exec bash /opt/data/projects/crypto-monitor/daily_report_pipeline.sh`. It is tracked in git and re-mounted READ-ONLY inside the container, so it cannot be edited from a session: change it on the host and recreate the gateway.
+- `hermes-data/projects/crypto-monitor/daily_report_pipeline.sh`, reachable at `/opt/data/projects/crypto-monitor/daily_report_pipeline.sh`, is the real pipeline. That one IS writable from a session.
 
 The wrapper is not pointless indirection. `cron/scheduler.py:4289-4300` refuses
 any `script` path that resolves outside `$HERMES_HOME/scripts`, which is
@@ -161,7 +161,7 @@ from every subprocess environment, so the pipeline's `hermes send` and
 ## First-time setup
 
 ```bash
-cd /opt/projects/crypto-monitor
+cd /opt/data/projects/crypto-monitor
 uv venv .venv --python python3.11
 uv pip install --python ./.venv/bin/python -e .
 # Smoke test
@@ -181,4 +181,4 @@ The pipeline runs from the project root via `daily_report_pipeline.sh`, so relat
 ## What this project is NOT
 
 - It is not a trading system. The agent does NOT execute trades, place orders, or move funds. Observation only.
-- It is not the gateway config. Channel behavior, API keys, and Discord settings live in `fork/hermes-config/config.yaml` on the host and in the repo-root `.env`.
+- It is not the gateway config. Channel behaviour and Discord settings live in `hermes-data/config.yaml` on the host (`/opt/data/config.yaml` here, read-only). API keys come from the container environment, populated from the repo-root `.env` and `hermes-data/.env`.

@@ -14,7 +14,7 @@ machine, then call its interpreter directly. Do not `source
 gone by the next command.
 
 ```bash
-cd /opt/projects/osint
+cd /opt/data/projects/osint
 ```
 
 Build the venv if `.venv/` is missing:

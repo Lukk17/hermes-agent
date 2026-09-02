@@ -1,0 +1,26 @@
+{
+  "jobs": [
+    {
+      "id": "crypto-monitor-daily",
+      "name": "Crypto Monitor - Daily Report",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 10 * * *"
+      },
+      "enabled": true,
+      "script": "crypto-monitor-daily.sh",
+      "no_agent": true,
+      "workdir": "/opt/data/projects/crypto-monitor",
+      "next_run_at": "2026-09-03T10:00:00+00:00",
+      "schedule_display": "0 10 * * *",
+      "fire_claim": null,
+      "last_run_at": "2026-09-02T10:05:33.137768+00:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    }
+  ],
+  "updated_at": "2026-09-02T10:05:33.145555+00:00"
+}

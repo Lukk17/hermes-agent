@@ -85,7 +85,17 @@ git checkout master
 git rebase v2026.8.27
 ```
 
-`git rebase` walks every commit upstream made between your fork base and `v2026.8.27` and replays your fork commits on top. With this fork's history being a few small commits and `v2026.8.27` being thousands of upstream commits ahead, expect conflicts only on files the fork actually modifies (`docker-compose.override.yml`, `Dockerfile.fork`, `.gitignore`, `fork/NOTE-*.md`, anything under `.agents/skills/`, etc.). Files the fork never touches will replay cleanly.
+`git rebase` walks every commit upstream made between your fork base and `v2026.8.27` and replays your fork commits on top. With this fork's history being a few small commits and `v2026.8.27` being thousands of upstream commits ahead, expect conflicts only on files the fork actually modifies. The full fork-owned set is:
+
+- `docker-compose.override.yml`, `Dockerfile.fork`
+- `.gitignore` (the fork appends the `hermes-data/` tracking rules to upstream's)
+- `FORK.md`, `fork/AGENTS.md`, `fork/NOTE-*.md`
+- `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`
+- `hermes-data/` (the tracked files inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, `scripts/crypto-monitor-daily.sh`)
+
+Only `.gitignore` is a file upstream also owns, so in practice it is the one that conflicts. Upstream ships neither `fork/` nor `hermes-data/`, so those replay cleanly however much has changed inside them, and files the fork never touches replay cleanly too.
+
+Two directories that used to be listed here are gone. `fork/hermes-config/` no longer exists: its three files moved into `hermes-data/` and are tracked there. `fork/projects/` no longer exists either, it moved to `hermes-data/projects/`. If a rebase surfaces either path, you are replaying a fork commit from before that move and should take the newer side.
 
 ### 3. Resolve conflicts
 
@@ -117,7 +127,7 @@ git rebase --skip     # drop the upstream commit entirely (last resort)
 git diff --stat upstream/v2026.8.27..master
 # expect: only the fork-specific files differ
 
-git diff upstream/v2026.8.27..master -- docker-compose.override.yml Dockerfile.fork .gitignore fork/
+git diff upstream/v2026.8.27..master -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/
 # eyeball each diff to confirm overrides and NOTES still make sense with new upstream base
 ```
 
@@ -241,7 +251,7 @@ Patterns you will hit most often during a rebase:
 Example: upstream `docker-compose.yml` exposes `DISCORD_GATEWAY_TOKEN`, your override still uses `DISCORD_BOT_TOKEN`.
 
 - Update your override to the new env var name
-- Update `fork/hermes-config/config.yaml` if it referenced the old name
+- Update `hermes-data/config.yaml` if it referenced the old name, then recreate the gateway, because that file is read-only inside the container and is read once at startup
 - Leave a one-line comment in the override explaining the rename
 
 ### Upstream split a service in two
@@ -255,7 +265,7 @@ Example: upstream `dashboard` service now becomes `dashboard` plus `dashboard-as
 
 Example: upstream removed `blockscout_query`, your crypto-monitor cron still calls it.
 
-- Reimplement the dropped tool as a fork plugin under `hermes-data/plugins/hermes-fork-extras/` (per the plugin-authoring guidelines; see `fork/NOTE-7` followups for a template)
+- Reimplement the dropped tool as a plugin under `hermes-data/plugins/<name>/`, which the container already sees at `/opt/data/plugins/<name>/` because `hermes-data/` is mounted whole. That directory is gitignored by default, see `fork/NOTE-6-minipc-proxmox.md` for how to make a plugin travel with the repo
 - Keep the cron job pointing at the new tool name
 - Document the dependency in `fork/NOTE-<n>-<project>.md`
 
@@ -300,7 +310,7 @@ This locks the fork state to the day the workflow was introduced. Future updates
 git checkout v2026.8.27
 git checkout -b master
 # port the fork-specific files from the old branch manually:
-git checkout <old-master> -- docker-compose.override.yml Dockerfile.fork .gitignore fork/ .agents/skills/
+git checkout <old-master> -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/ .agents/skills/
 # commit
 git add -A
 git commit -m "feat(fork): re-fork on v2026.8.27 baseline"

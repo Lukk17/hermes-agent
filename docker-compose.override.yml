@@ -12,39 +12,28 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./hermes-data:/opt/data
-      - ./fork/projects:/opt/projects
-      - ./.agents/skills:/opt/external-skills:ro
-      - ./skills:/opt/skills:ro
-      # Fork-specific overrides for files we change often. hermes-data:/opt/data
-      # provides the runtime state; these overrides shadow the same paths.
-      - ./fork/hermes-config/SOUL.md:/opt/data/SOUL.md
-      - ./fork/hermes-config/config.yaml:/opt/data/config.yaml
-      # cron/scheduler.py refuses any script outside $HERMES_HOME/scripts, and
-      # that dir lives under the gitignored hermes-data mount — track the
-      # wrapper here so it reaches every machine.
-      - ./fork/hermes-config/scripts/crypto-monitor-daily.sh:/opt/data/scripts/crypto-monitor-daily.sh
+      # Re-mounted read-only on top of the read-write parent so a running
+      # hermes cannot rewrite the tracked config. A container recreate is the
+      # only way this file changes.
+      - ./hermes-data/config.yaml:/opt/data/config.yaml:ro
+      - ./.agents/skills:/opt/data/external-skills:ro
+      - ./skills:/opt/data/bundled-skills:ro
+      # Cron entry point, same recreate-only treatment as config.yaml.
+      - ./hermes-data/scripts/crypto-monitor-daily.sh:/opt/data/scripts/crypto-monitor-daily.sh:ro
     environment:
       - PATH=/opt/hermes/bin:/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:/usr/local/bin:/usr/bin:/bin
-      # Messaging
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      # Messaging. DISCORD_BOT_TOKEN and MINIMAX_API_KEY are deliberately NOT
+      # passed: they live only in hermes-data/.env, which hermes loads with
+      # override=True, so a compose passthrough would inject an empty string
+      # over the real value.
       # Behavioural Discord settings live in config.yaml (discord.*); env wins
       # over YAML, so passing them here would pin them. This one has no
       # config.yaml path at all, so it stays.
       - DISCORD_COMMAND_SYNC_POLICY=${DISCORD_COMMAND_SYNC_POLICY:-off}
-      # Scoped write sandbox. The upstream image bakes in
-      # HERMES_WRITE_SAFE_ROOT=/opt/data, but the fork keeps its tracked source
-      # under /opt/projects/ (mounted from ./fork/projects on the host). Set the
-      # var to both paths so the agent can edit fork config and project code.
-      # Colon-separated list of roots (hermes parses with os.pathsep).
-      # Note: setting this to "off" or empty does NOT disable the sandbox. The
-      # code at agent/file_safety.py resolves the string via realpath and adds
-      # it to the roots set, so a bogus string becomes a bogus single root that
-      # blocks everything else. To actually allow all writes, set it to "/" or
-      # list every directory the agent should be able to write to.
-      - HERMES_WRITE_SAFE_ROOT=/opt/data:/opt/projects
-
-      # LLM provider
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      # The boot-time schema migration writes config.yaml and a .bak- copy
+      # beside it. Both are impossible under the read-only mount, so skip it
+      # and migrate on the host instead.
+      - HERMES_SKIP_CONFIG_MIGRATION=1
 
       # On-chain
       - BLOCKSCOUT_API_KEY=${BLOCKSCOUT_API_KEY}
@@ -85,8 +74,9 @@ services:
       - gateway
     volumes:
       - ./hermes-data:/opt/data
-      # Dashboard reads SOUL.md for the persona banner only; skip skills + cron
-      - ./fork/hermes-config/SOUL.md:/opt/data/SOUL.md
+      - ./hermes-data/config.yaml:/opt/data/config.yaml:ro
+    environment:
+      - HERMES_SKIP_CONFIG_MIGRATION=1
     command: ["dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open"]
 
   # Builds the upstream image that Dockerfile.fork's BASE_IMAGE points at.

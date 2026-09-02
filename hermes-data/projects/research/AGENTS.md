@@ -1,6 +1,6 @@
 # Research project conventions
 
-This file is read by the hermes agent when its working directory is `/opt/projects/research/`. It layers on top of `/opt/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
+This file is read by the hermes agent when its working directory is `/opt/data/projects/research/`. It layers on top of `/opt/data/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
 
 ## Skill usage in this project
 
@@ -56,7 +56,7 @@ Conventions:
 When the user types something like `research <topic description>` in `#hermes-research`:
 
 1. Slugify the topic: lowercase, replace spaces and special characters with hyphens, dedupe hyphens, max 80 chars.
-2. `mkdir -p /opt/projects/research/<topic-slug>/{prototype,docs}` if a prototype is anticipated, else just the topic dir.
+2. `mkdir -p /opt/data/projects/research/<topic-slug>/{prototype,docs}` if a prototype is anticipated, else just the topic dir.
 3. Do the research. Use the appropriate tools (web search, ascend scraper, project subagents, etc.).
 4. Write `findings.md` (and optionally `proposition.md`).
 5. Write the Discord-friendly summary as the FINAL RESPONSE of the turn. There is no Discord send tool: the gateway delivers the final response to `#hermes-research` by itself. Keep it short (3-5 paragraphs max). To attach `findings.md`, add a line of the form `MEDIA:` followed by its absolute path, in plain text outside any code block, inline backticks or blockquote.
@@ -77,11 +77,11 @@ Format per entry:
 
 ## Per-project conventions inherited
 
-This project follows the same conventions as every other project in `/opt/projects/`:
+This project follows the same conventions as every other project in `/opt/data/projects/`:
 
-- Python dependencies live in a per-prototype venv at `/opt/projects/research/<topic-slug>/prototype/.venv/` (with leading dot, gitignored). Build it in the prototype directory when a topic needs one: `uv venv .venv --python python3.12`, then invoke `./.venv/bin/python` directly. There is no project-level venv, and most topics need none at all.
-- Cron-scheduled research is not the default. If a recurring research task is needed (e.g. weekly market scan), add a `fork/hermes-config/cron/jobs.json` entry (bind-mounted at `/opt/data/cron/jobs.json` inside the container) pointing at a topic-specific script.
-- Skill mounting: `/opt/external-skills/` and `/opt/skills/` are both available. Use them when appropriate. The user's earlier decision was that all skills go in the shared skills mount, not per-project. Stay consistent with that.
+- Python dependencies live in a per-prototype venv at `/opt/data/projects/research/<topic-slug>/prototype/.venv/` (with leading dot, gitignored). Build it in the prototype directory when a topic needs one: `uv venv .venv --python python3.12`, then invoke `./.venv/bin/python` directly. There is no project-level venv, and most topics need none at all.
+- Cron-scheduled research is not the default. If a recurring research task is needed (e.g. weekly market scan), add an entry to `/opt/data/cron/jobs.json` (`hermes-data/cron/jobs.json` on the host) pointing at a topic-specific script.
+- Skill mounting: `/opt/data/external-skills/` and `/opt/data/bundled-skills/` are both available. Use them when appropriate. The user's earlier decision was that all skills go in the shared skills mount, not per-project. Stay consistent with that.
 
 ## What this project is NOT
 
@@ -95,4 +95,4 @@ The `#hermes-research` channel is for open-ended investigation, not just answeri
 - Always cite sources (URLs, paper titles, API names).
 - Distinguish between confirmed facts, derived inferences, and speculations.
 - Prefer Markdown deliverable. Only switch to other formats if the user asks.
-- Avoid making changes to code outside `/opt/projects/research/` unless explicitly asked.
+- Avoid making changes to code outside `/opt/data/projects/research/` unless explicitly asked.

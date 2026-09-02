@@ -13,8 +13,8 @@
 # but the upstream image does not ship:
 #   - apt packages for OSINT (libxml2, libxslt, nmap, masscan, libpcap, tor, golang-go, etc.)
 #   - pyenv (Python version manager)
-#   - Python 3.11 (used by fork/projects/crypto-monitor)
-#   - Python 3.12 (used by fork/projects/osint)
+#   - Python 3.11 (used by hermes-data/projects/crypto-monitor)
+#   - Python 3.12 (used by hermes-data/projects/osint)
 #   - TUI chown fix (the original reason this Dockerfile existed; see git log)
 #
 # The same image serves BOTH services in docker-compose.override.yml. The

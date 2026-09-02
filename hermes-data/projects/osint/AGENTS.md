@@ -1,6 +1,6 @@
 # OSINT project conventions
 
-This file is read by the hermes agent when its working directory is `/opt/projects/osint/`. It layers on top of `/opt/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
+This file is read by the hermes agent when its working directory is `/opt/data/projects/osint/`. It layers on top of `/opt/data/projects/AGENTS.md`. When the two conflict, the project-specific instruction here wins.
 
 ## Skill usage in this project
 
@@ -42,7 +42,7 @@ Source code (tracked):
 - `data/leaks/` — cached leak database output. The directory exists but is empty and has no `.gitkeep`; nothing in it is tracked.
 - `reports/` — generated markdown reports per investigation.
 
-Runtime state (gitignored via `fork/projects/.gitignore`):
+Runtime state (gitignored via `hermes-data/projects/.gitignore`):
 
 - `.venv/` — Python virtualenv. NOT present in a fresh checkout or in the image; build it once per machine via `uv venv .venv --python python3.12` then `uv pip install --python ./.venv/bin/python -e .`. The hermes runtime is Python 3.13.5; this venv is independent and pyenv supplies 3.12. **Always pass `--python python3.12` explicitly.** `pyproject.toml` declares `requires-python = ">=3.11"` with no upper bound, so the metadata does NOT pin the interpreter and `uv venv` would happily build this project on 3.13. The pin is the only thing keeping it on 3.12. (crypto-monitor is different: its `requires-python` is `>=3.11,<3.12`, which genuinely constrains it.)
 - `data/` — all investigation data, including `data/leaks/`.
@@ -58,11 +58,11 @@ The agent must NEVER start an investigation without the user's explicit authoriz
 2. Agent confirms the target, depth, and format. Asks for clarification if any field is missing.
 3. Agent makes sure the venv exists, once per machine. `.venv/` is gitignored and is not in the image, so on a fresh machine it has to be built:
     ```
-    cd /opt/projects/osint && test -x ./.venv/bin/python || (uv venv .venv --python python3.12 && uv pip install --python ./.venv/bin/python -e .)
+    cd /opt/data/projects/osint && test -x ./.venv/bin/python || (uv venv .venv --python python3.12 && uv pip install --python ./.venv/bin/python -e .)
     ```
 4. Agent runs the query with the venv interpreter directly. Do NOT `source .venv/bin/activate`: a tool call is not a persistent interactive shell, so the activation is gone by the next command.
     ```
-    cd /opt/projects/osint && ./.venv/bin/python src/main.py --query "<entity>" [--no-cascade] [--format markdown|json]
+    cd /opt/data/projects/osint && ./.venv/bin/python src/main.py --query "<entity>" [--no-cascade] [--format markdown|json]
     ```
    Exit 3 means the run paused for human intervention. Handle it as described under "Blocked services", then resume with `--resume <token>` rather than starting over.
 5. Agent reads the produced report from `reports/`.
@@ -134,7 +134,7 @@ Read by the code but NOT wired through the override, so unset in the container a
 ## First-time setup
 
 ```bash
-cd /opt/projects/osint
+cd /opt/data/projects/osint
 uv venv .venv --python python3.12
 uv pip install --python ./.venv/bin/python -e .
 # Smoke test
@@ -169,4 +169,4 @@ grep -rn "/home/node" src/
 ## What this project is NOT
 
 - It is NOT automated reconnaissance. Every investigation starts with the user's explicit authorization.
-- It is NOT the gateway config. Channel behavior, API keys, and Discord settings live in `fork/hermes-config/config.yaml` on the host and in the repo-root `.env`.
+- It is NOT the gateway config. Channel behaviour and Discord settings live in `hermes-data/config.yaml` on the host (`/opt/data/config.yaml` here, read-only). API keys come from the container environment, populated from the repo-root `.env` and `hermes-data/.env`.

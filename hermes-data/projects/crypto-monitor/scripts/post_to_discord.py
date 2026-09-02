@@ -5,7 +5,7 @@ Runs inside the agent runtime container, which is the only place the runtime CLI
 exists. The host is Windows and cannot run this.
 
 Usage:
-    cd /opt/projects/crypto-monitor && .venv/bin/python scripts/post_to_discord.py
+    cd /opt/data/projects/crypto-monitor && .venv/bin/python scripts/post_to_discord.py
 
 Exit codes:
     0 - every message delivered

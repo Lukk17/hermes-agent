@@ -39,7 +39,13 @@ Recreate a service (forces re-read of env, override, and command changes):
 docker compose up -d --force-recreate gateway
 ```
 
-For changes inside `./fork/hermes-config/` (SOUL.md, config.yaml, cron/jobs.json) or `./fork/projects/`, this is required. The new bind mounts and overrides only apply to a freshly created container, not to a restarted one.
+A recreate is not needed for most edits. `./hermes-data/` on the host is mounted whole at `/opt/data` in the container, so a file you save on the host is already changed inside the container. What you actually need per file:
+
+- `./hermes-data/SOUL.md`, `./hermes-data/cron/jobs.json`, `./hermes-data/memories/*.md`, anything under `./hermes-data/projects/`: nothing. The next session or the next cron tick reads the new content.
+- `./hermes-data/config.yaml`: recreate. Config is read once at process start, and the file is mounted read-only, so the running process will never pick it up.
+- `./hermes-data/scripts/crypto-monitor-daily.sh`: recreate. Same read-only mount.
+- `docker-compose.override.yml` or `.env`: recreate. Mounts and environment only apply to a freshly created container.
+- `Dockerfile.fork`: rebuild, then recreate.
 
 ### Logs
 
@@ -48,7 +54,7 @@ docker compose logs -f gateway
 docker compose logs --tail 50 dashboard
 ```
 
-The persistent gateway log is at `hermes-data/logs/gateway.log` (host path). It survives container recreation.
+Those two read the container's stdout. The persistent logs are ordinary files on the host under `./hermes-data/logs/`, because `hermes-data/` is hermes' home directory: `gateway.log` (the gateway), `agent.log` (INFO and above), `errors.log` (WARNING and above). They survive container recreation and are gitignored. Inside the container the same files are at `/opt/data/logs/`.
 
 ### Container shell
 
@@ -108,7 +114,7 @@ docker compose build --no-cache dashboard
 docker compose up -d
 ```
 
-`./hermes-data/` (runtime state) and `./fork/hermes-config/` (tracked config) both survive `docker compose down`, and they survive `docker compose down -v` too. `-v` removes named volumes; both of those are BIND mounts from the repo, so `-v` never touches them. To get a true zero-state you have to delete `./hermes-data/` yourself on the host, which is destructive and irreversible.
+`./hermes-data/` survives `docker compose down`, and it survives `docker compose down -v` too. `-v` removes named volumes, and this fork uses none: `/opt/data` is a bind mount from the repo, so `-v` never touches it. To get a true zero-state you would have to delete files under `./hermes-data/` yourself on the host, which is destructive and irreversible, and would also delete the tracked config, persona, cron jobs, memories and project workspaces that live in the same directory. If you want a clean runtime without losing those, delete only the untracked parts: `git clean -xdf hermes-data` removes exactly what `.gitignore` excludes and leaves the tracked files alone. Check what it would remove first with `git clean -xdn hermes-data`.
 
 ### Adding a new credential
 
@@ -134,19 +140,21 @@ docker compose up -d --force-recreate gateway
 
 Drop a new folder under `.agents/skills/` with a `SKILL.md` (YAML frontmatter: `name`, `description`, optional `version`, `metadata.hermes.tags`). For new skills that exist upstream in `Lukk17/agent-standards/.agents/skills/` but not locally, use the `git archive` snippet in `fork/NOTE-6-minipc-proxmox.md` to copy just that skill from agent-standards.
 
-The container reads `.agents/skills/` from `/opt/external-skills/` (read-only bind mount). `fork/hermes-config/config.yaml` already lists `/opt/external-skills` in `skills.external_dirs`. The skill appears in the next session. Force a rescan without restarting:
+The container reads `.agents/skills/` from `/opt/data/external-skills/` (read-only bind mount). `hermes-data/config.yaml` already lists `/opt/data/external-skills` in `skills.external_dirs`. The skill appears in the next session. Force a rescan without restarting:
 
 ```powershell
 docker compose exec gateway hermes skills reload
 ```
 
-### Do not let hermes rewrite config.yaml
+### Hermes cannot rewrite config.yaml, by design
 
-`hermes tools`, `hermes setup`, and the `/skin` and `/model` slash commands write `config.yaml` back out through a YAML dump. That dump strips every comment and every key still sitting at its default value, so running any of them inside the container silently rewrites `fork/hermes-config/config.yaml` (it is bind-mounted at `/opt/data/config.yaml`) into a shorter, comment-free file. Edit the file on the host instead, then recreate the gateway. If one of them has already run, `git diff fork/hermes-config/config.yaml` shows exactly what was dropped.
+`hermes tools`, `hermes setup`, and the `/skin` and `/model` slash commands write `config.yaml` back out through a YAML dump that strips every comment and every key still sitting at its default value. That used to silently shorten the tracked config. It cannot happen now: `docker-compose.override.yml` re-mounts `./hermes-data/config.yaml` at `/opt/data/config.yaml` read-only on top of the read-write parent mount, so any in-container write to it fails. The same override sets `HERMES_SKIP_CONFIG_MIGRATION=1`, because the boot-time schema migration writes the file plus a `.bak-` copy beside it and both are impossible under that mount.
 
-### Switching LLM providers
+The consequence to internalise: config.yaml only ever changes when you change it on your machine.
 
-Edit `fork/hermes-config/config.yaml` on the host:
+### Changing config, for example switching LLM providers
+
+Edit `./hermes-data/config.yaml` on the host:
 
 ```yaml
 model:
@@ -154,7 +162,13 @@ model:
   provider: minimax
 ```
 
-Then `docker compose up -d --force-recreate gateway`. Do NOT use `hermes model` inside the container for this: see the warning above.
+Then recreate, because the file is read once at startup and is read-only inside the container:
+
+```powershell
+docker compose up -d --force-recreate gateway dashboard
+```
+
+`hermes model` and `hermes tools` inside the container will not work for this, for the reason above. The file is tracked in git, so `git diff hermes-data/config.yaml` always shows exactly what you changed before you commit it.
 
 ### Re-running OAuth login
 
@@ -165,23 +179,25 @@ docker compose exec -it gateway hermes auth add minimax-oauth --no-browser
 docker compose exec -it gateway hermes auth add anthropic --type oauth
 ```
 
-### Backing up runtime state
+### Backing up
 
-State lives in `./hermes-data/` on the host. Config that the fork owns lives in `./fork/hermes-config/`. Both are worth backing up separately.
+Config, persona, cron jobs, memories and project workspaces are tracked in git, so committing and pushing is the backup for those, and it is also how they reach another machine. See the last section of `FORK.md`.
+
+What git does not cover is the untracked half of `./hermes-data/`: `state.db` and `sessions/` (conversation history), `auth.json` (OAuth tokens), `kanban.db`, `.env`, and the logs. One copy of the whole directory catches both halves.
 
 Windows (dev box):
 
 ```powershell
 robocopy .\hermes-data .\hermes-data-backup /MIR
-robocopy .\fork\hermes-config .\fork\hermes-config-backup /MIR
 ```
 
 Linux (minipc):
 
 ```bash
 rsync -a --delete ./hermes-data/ ./hermes-data-backup/
-rsync -a --delete ./fork/hermes-config/ ./fork-hermes-config-backup/
 ```
+
+Take the copy with the containers stopped if you want a consistent `state.db`. SQLite write-ahead log files (`state.db-wal`, `state.db-shm`) are live while the gateway runs.
 
 ### Run the CLI as `hermes`, never by absolute path
 
@@ -211,10 +227,10 @@ Both the repo-root `.env` and `hermes-data/.env` are gitignored, so this is not 
 | `Unauthorized user` in gateway logs | `GATEWAY_ALLOW_ALL_USERS=true` not set, or fill `DISCORD_ALLOWED_USERS` |
 | `hermes doctor` reports auth missing | Re-run the OAuth flow for that provider |
 | `host.docker.internal` not resolving | Already handled by `extra_hosts` in the override; check Docker version supports `host-gateway` |
-| `.agents/skills/` content not visible to hermes | `fork/hermes-config/config.yaml` missing `skills.external_dirs`, or services not recreated after the edit |
+| `.agents/skills/` content not visible to hermes | `hermes-data/config.yaml` missing `skills.external_dirs`, or the gateway not recreated after that edit. Config is read-only in the container, so a config change always needs a recreate |
 | New env value not in container | Recreate the service: `docker compose up -d --force-recreate gateway` |
-| Cron job not firing | `hermes cron list` does not show the job, or job is `enabled: false`. Verify `hermes-data/cron/jobs.json` (mounted from `fork/hermes-config/cron/jobs.json`) and recreate the gateway |
+| Cron job not firing | `hermes cron list` does not show the job, or job is `enabled: false`. Check `hermes-data/cron/jobs.json` on the host, which is the same file the container reads at `/opt/data/cron/jobs.json`. It is writable at runtime, so no recreate is needed after editing it |
 | Cron job reports `last_status: ok` every day but its data is stale | The job's `script` path resolves outside `/opt/data/scripts`, so it is blocked at every fire. `cron/scheduler.py:4296` emits `Blocked: script path resolves outside the scripts directory (/opt/data/scripts):` and `cron/scheduler.py:4568` folds that into the prompt under a `## Script Error` heading and runs the agent anyway. The agent turn succeeds, so the job is recorded green while the script never ran. Fix the path, not the job. The same swallow has a second entrance: a script that runs and exits non-zero (`Script exited with code 5`) was also reported `ok` whenever the agent turn after it succeeded. Setting `no_agent: true` closes that second route, because then the script's exit code is the only signal |
 | Cron script fails with `Platform 'discord' is not configured. Set up credentials in ~/.hermes/config.yaml or environment variables.` | The credential is in the compose passthrough but not in `hermes-data/.env`, so it is stripped from the child process. `DISCORD_BOT_TOKEN` and `MINIMAX_API_KEY` are the two keys this fork passes that hermes strips from subprocesses. Add them to `hermes-data/.env` as well. See "Any credential a hermes CHILD process needs" above |
-| Channel not responding | The channel ID is missing from `discord.free_response_channels` and `discord.allowed_channels` in `fork/hermes-config/config.yaml` |
+| Channel not responding | The channel ID is missing from `discord.free_response_channels` and `discord.allowed_channels` in `hermes-data/config.yaml` |
 | Dashboard not finding skills mounts | Dashboard intentionally does not mount skills (only the gateway needs them). Behavior is expected, no action needed |

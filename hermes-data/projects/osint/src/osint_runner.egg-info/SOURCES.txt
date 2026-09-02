@@ -15,6 +15,7 @@ src/services/domain_service.py
 src/services/email_service.py
 src/services/enrichment_service.py
 src/services/github_service.py
+src/services/gotools_service.py
 src/services/hunter_service.py
 src/services/infra_service.py
 src/services/local_leak_service.py

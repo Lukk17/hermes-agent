@@ -302,13 +302,13 @@ Calculated automatically:
 The whole pipeline, exactly as cron runs it:
 
 ```bash
-cd /opt/projects/crypto-monitor && ./daily_report_pipeline.sh
+cd /opt/data/projects/crypto-monitor && ./daily_report_pipeline.sh
 ```
 
 That publishes. To rebuild the data without publishing, run the first step alone:
 
 ```bash
-cd /opt/projects/crypto-monitor && ./.venv/bin/python scripts/report_generator.py
+cd /opt/data/projects/crypto-monitor && ./.venv/bin/python scripts/report_generator.py
 ```
 
 Exit codes from the pipeline: `0` published, `2` bad usage or the venv Python is
@@ -354,7 +354,7 @@ crypto-monitor/
 machine before the pipeline will run at all. Without it the pipeline exits 2.
 
 ```bash
-cd /opt/projects/crypto-monitor && uv venv .venv --python python3.11 && uv pip install --python ./.venv/bin/python -e .
+cd /opt/data/projects/crypto-monitor && uv venv .venv --python python3.11 && uv pip install --python ./.venv/bin/python -e .
 ```
 
 Declared in `pyproject.toml`, installed into `.venv/`:

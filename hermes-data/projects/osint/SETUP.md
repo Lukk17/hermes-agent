@@ -8,7 +8,7 @@ This project uses a layered approach:
 ## Quick Install
 
 ```bash
-cd /opt/projects/osint
+cd /opt/data/projects/osint
 
 # Build the venv once per machine (it is gitignored and not in the image)
 uv venv .venv --python python3.12
@@ -31,7 +31,7 @@ not under `src/`). It carries its own `pyproject.toml`; run it with the project
 venv and its own directory on `PYTHONPATH`:
 
 ```bash
-PYTHONPATH=/opt/projects/osint/theHarvester /opt/projects/osint/.venv/bin/python /opt/projects/osint/theHarvester/bin/theHarvester --help
+PYTHONPATH=/opt/data/projects/osint/theHarvester /opt/data/projects/osint/.venv/bin/python /opt/data/projects/osint/theHarvester/bin/theHarvester --help
 ```
 
 ### OWASP Amass
@@ -39,7 +39,7 @@ Subdomain enumeration. The Go source is vendored at `Amass/`, and a compiled
 binary ships in `bin/`:
 
 ```bash
-/opt/projects/osint/bin/amass -help
+/opt/data/projects/osint/bin/amass -help
 ```
 
 ### Metagoofil
@@ -63,7 +63,7 @@ which tor nmap masscan go
 ## API Keys
 
 There is NO `.env` file in this project and there must never be one. Anything
-under `/opt/projects/` is reachable by every skill, subagent and sandbox, so a
+under `/opt/data/projects/` is reachable by every skill, subagent and sandbox, so a
 key written there leaks across contexts.
 
 Keys reach the code through the container's process environment:
@@ -109,7 +109,7 @@ See `leaks_dbs.md` for full list with torrent links.
 
 Quick start:
 ```bash
-mkdir -p /opt/projects/osint/data/leaks
+mkdir -p /opt/data/projects/osint/data/leaks
 
 # Common large dumps (search via torrent):
 # - Collection #1 (2018) ~87GB
@@ -124,7 +124,7 @@ grep -r "target@email.com" data/leaks/
 ## Verify Installation
 
 ```bash
-cd /opt/projects/osint
+cd /opt/data/projects/osint
 
 # Check all tools
 ./.venv/bin/python -c "import maigret; print('maigret OK')"
@@ -153,7 +153,7 @@ which nmap && echo "nmap OK"
 ## Running the OSINT Runner
 
 ```bash
-cd /opt/projects/osint
+cd /opt/data/projects/osint
 
 # Basic cascade (auto-follows connections)
 ./.venv/bin/python src/main.py --query "Jan Kowalski"

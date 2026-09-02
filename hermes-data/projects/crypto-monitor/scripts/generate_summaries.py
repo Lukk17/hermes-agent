@@ -6,7 +6,7 @@ and the closing market summary. Both land in data/reports/ as body-only markdown
 that reports.report_builder folds into the fixed delivery sequence.
 
 Usage:
-    cd /opt/projects/crypto-monitor && .venv/bin/python scripts/generate_summaries.py
+    cd /opt/data/projects/crypto-monitor && .venv/bin/python scripts/generate_summaries.py
 
 Exit codes:
     0 - both summaries written
