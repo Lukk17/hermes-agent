@@ -30,6 +30,19 @@ class APIKeyMissingError(CryptoMonitorError):
         )
 
 
+class RateLimitedError(CryptoMonitorError):
+    """
+    Raised when an API refuses a request with HTTP 429.
+
+    Attributes:
+        service: Name of the service that rate-limited the caller
+    """
+
+    def __init__(self, service: str):
+        self.service = service
+        super().__init__(f"{service} rate-limited the request (HTTP 429)")
+
+
 class DataCollectionError(CryptoMonitorError):
     """
     Raised when a collector fails to fetch data.

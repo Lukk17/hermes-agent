@@ -8,6 +8,7 @@ Usage: python3 whale_tracker_alchemy.py
 """
 
 import json
+import os
 import time
 import sys
 from datetime import datetime
@@ -30,10 +31,8 @@ REQUEST_DELAY = 0.1
 
 
 def get_alchemy_api_key() -> str:
-    """Get Alchemy API key from settings."""
-    from src.config import load_config
-    config = load_config()
-    return config.get("api_keys", {}).get("alchemy", "")
+    """Get Alchemy API key from the environment."""
+    return os.environ.get("ALCHEMY_API_KEY", "")
 
 
 def alchemy_call(method: str, params: list = None) -> dict:

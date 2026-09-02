@@ -37,7 +37,7 @@ is restored.
 
 ### Section Headers (in Discord message, NOT in PNG)
 
-NOT every section has a header. Six are headerless BY DESIGN, because they have
+NOT every section has a header. Five are headerless BY DESIGN, because they have
 no header to carry an emoji: they render a bare table or a bare list. Do not
 "fix" them by adding one.
 
@@ -48,7 +48,6 @@ Headerless by design:
 - Market Indicators (a box table)
 - Market Breadth
 - Crypto Sectors (a box table)
-- Quick Links (four bare URLs, each wrapped in angle brackets)
 
 Sections that DO carry a header, exactly as the renderer emits it:
 
@@ -61,6 +60,7 @@ Sections that DO carry a header, exactly as the renderer emits it:
 - `## 🐋 Known Whales` and `## 🐋 Whale Moves` (the whales section emits both)
 - `## 🪂 Airdrops`
 - `## 📋 Market Summary` (model-written, replaces the data-rendered summary section)
+- `## 🔗 Quick Links` (header, then four bare URLs, each wrapped in angle brackets)
 
 The headers live in the section renderers under `reports/sections/`, except the
 two model-written ones, which `reports/report_builder.py` supplies from
@@ -132,7 +132,7 @@ survives.
 21. Whale Activity
 22. `## 🪂 Airdrops`
 23. `## 📋 Market Summary` (model-written)
-24. Quick Links
+24. `## 🔗 Quick Links`
 
 That is 24 messages at most, and a typical run delivers about 22 because a
 couple of sections have no data on any given day. Which two vary, so the count

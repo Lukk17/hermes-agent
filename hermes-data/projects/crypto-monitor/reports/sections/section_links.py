@@ -14,7 +14,10 @@ class SectionLinks(SectionRenderer):
             "https://coinmarketcap.com",
             "https://defillama.com",
         ]
-        return "\n".join(f"<{url}>" for url in links)
+        lines = ["## 🔗 Quick Links"]
+        lines.extend(f"<{url}>" for url in links)
+
+        return "\n".join(lines)
 
 
 def render(data: dict) -> str:
