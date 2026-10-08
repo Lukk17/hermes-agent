@@ -74,10 +74,11 @@ RUN apt-get -o Acquire::Retries=3 update && \
         && rm -rf /var/lib/apt/lists/*
 
 # ---------- pyenv (Python version manager) ----------
-# pyenv lets us install arbitrary Python versions side by side. The crypto-monitor
-# project uses 3.11, the osint project uses 3.12, the upstream hermes runtime
-# uses 3.13. Three Pythons in one image, no PATH conflicts because pyenv shims
-# only fire on the requested version.
+# pyenv lets us install arbitrary Python versions side by side. Project .venvs
+# use uv-managed CPython under /opt/data/.local/share/uv/python/, not pyenv.
+# pyenv 3.11 and 3.12 stay for tools that need older Python versions, and the
+# upstream hermes runtime uses 3.13. Three Pythons in one image, no PATH
+# conflicts because pyenv shims only fire on the requested version.
 #
 # Use the official pyenv.run installer script (more reliable than git clone
 # when the network is flaky or rate-limited). pyenv has no prebuilt-Python
