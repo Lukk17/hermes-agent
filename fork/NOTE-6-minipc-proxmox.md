@@ -653,6 +653,7 @@ carrying between machines:
 **/data/*
 !projects/crypto-monitor/data/reports/
 !projects/crypto-monitor/data/reports/**
+projects/crypto-monitor/data/reports/.pipeline_errors/
 ```
 
 The re-include pairs look repetitive on purpose. Git will not look inside an
