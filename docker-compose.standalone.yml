@@ -1,14 +1,15 @@
 #
-# docker-compose.minipc.yml, minipc overlay for docker-compose.yml
+# docker-compose.standalone.yml, standalone overlay for docker-compose.yml
 #
-# The minipc pulls prebuilt images from Docker Hub instead of building, and
-# needs the override's volume/env wiring without pulling in the override's
-# build: blocks. Select this file explicitly with -f so Compose's automatic
+# The standalone stack pulls prebuilt images from Docker Hub instead of
+# building, so it runs on any machine: the minipc, or a dev box testing the
+# pull flow. It needs the override's volume/env wiring without pulling in the
+# override's build: blocks. Select this file explicitly with -f so Compose's automatic
 # docker-compose.override.yml merge never kicks in:
 #
-#   docker compose -f docker-compose.yml -f docker-compose.minipc.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.standalone.yml up -d
 #
-# or, as documented, put COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+# or, as documented, put COMPOSE_FILE=docker-compose.yml:docker-compose.standalone.yml
 # in the minipc's repo-root .env so plain `docker compose` picks the pair up.
 # See "Every docker compose command on the minipc uses both files" in
 # fork/NOTE-6-minipc-proxmox.md.

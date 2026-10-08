@@ -30,7 +30,8 @@ After each update cycle, the built images carry these names:
 | `hermes-agent:fork-dashboard` | `lukk17/hermes-agent-dashboard:latest`<br>`lukk17/hermes-agent-dashboard:v<UPSTREAM_TAG>-lukk` | the same `Dockerfile.fork` and the same base (dashboard service) |
 
 `Dockerfile.fork` is the fork's tools layer: OSINT apt dependencies, pyenv with
-Python 3.11 (crypto-monitor) and 3.12 (osint), the
+Python 3.11 and 3.12 for tools that need an older Python (the project venvs
+use a uv-managed CPython instead, see Step 6b in `fork/NOTE-1-install.md`), the
 `chown -R hermes:hermes /opt/hermes/ui-tui` fix, and a
 `/opt/data/.local/bin/hermes` symlink. It takes `BASE_IMAGE` as a build arg so
 the upstream image keeps its own tag and is never rebuilt by the fork's
@@ -318,7 +319,7 @@ fork-built image carries two Docker Hub tags. Use the versioned one
 
 ### 7. Update the minipc to consume the new image
 
-The minipc needs no compose change for this. `docker-compose.minipc.yml`
+The minipc needs no compose change for this. `docker-compose.standalone.yml`
 pins both services to `:latest`, and step 6 just moved that tag to the new
 build, so `git pull` on the minipc is only there to pick up a fork doc or
 compose-file change, never to touch an image reference.
@@ -355,11 +356,11 @@ docker compose exec gateway hermes doctor
 docker compose exec gateway hermes cron list
 ```
 
-Every `docker compose` command above takes `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, added once at bootstrap, and they must run from `/opt/docker-stack/hermes` where Compose finds that file. The pair matters: `docker-compose.minipc.yml` is what replaces the `build:` blocks with registry images, and without it Compose would merge `docker-compose.override.yml` and try to build. How to add the line, and the explicit `-f` form if it is missing, is in "Every docker compose command on the minipc uses both files" in `fork/NOTE-6-minipc-proxmox.md`.
+Every `docker compose` command above takes `docker-compose.yml` plus `docker-compose.standalone.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, added once at bootstrap, and they must run from `/opt/docker-stack/hermes` where Compose finds that file. The pair matters: `docker-compose.standalone.yml` is what replaces the `build:` blocks with registry images, and without it Compose would merge `docker-compose.override.yml` and try to build. How to add the line, and the explicit `-f` form if it is missing, is in "Every docker compose command on the minipc uses both files" in `fork/NOTE-6-minipc-proxmox.md`.
 
 If anything fails after the upgrade, roll back by moving `:latest` itself back
 to the previous good build, on the dev box, not by editing
-`docker-compose.minipc.yml` on the minipc. The file stays pinned to `:latest`
+`docker-compose.standalone.yml` on the minipc. The file stays pinned to `:latest`
 either way, which is the point of pinning it there in the first place:
 
 ```bash
@@ -516,7 +517,7 @@ docker push lukk17/hermes-agent-gateway:latest
 docker push lukk17/hermes-agent-dashboard:v<TAG>-lukk
 docker push lukk17/hermes-agent-dashboard:latest
 
-# consume on minipc, no compose change, docker-compose.minipc.yml stays on :latest
+# consume on minipc, no compose change, docker-compose.standalone.yml stays on :latest
 # the compose pair comes from the COMPOSE_FILE line in the minipc .env (fork/NOTE-6-minipc-proxmox.md)
 ssh user@minipc
 cd /opt/docker-stack/hermes

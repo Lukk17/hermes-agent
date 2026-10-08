@@ -45,7 +45,7 @@ It is written for a dev box that builds the images locally. Every `docker compos
 | File | Purpose |
 |---|---|
 | `docker-compose.override.yml` | Auto-merged on top of upstream `docker-compose.yml`. Points `/opt/data` at `./hermes-data`; re-mounts `./hermes-data/config.yaml` and `./hermes-data/scripts/crypto-monitor-daily.sh` read-only on top of it; adds `.agents/skills:/opt/data/external-skills:ro` and `./skills:/opt/data/bundled-skills:ro`; sets `HERMES_SKIP_CONFIG_MIGRATION=1`; env passthrough; the `Dockerfile.fork` build for both services with `BASE_IMAGE=hermes-agent:upstream`; and the build-only `upstream-base` service that produces that base image |
-| `Dockerfile.fork` | The fork's tools image. Takes `BASE_IMAGE` as a build arg (default `hermes-agent:upstream`) and layers on: OSINT apt dependencies, pyenv with Python 3.11 (crypto-monitor) and 3.12 (osint), a `chown -R hermes:hermes /opt/hermes/ui-tui`, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Both the gateway and the dashboard build from it |
+| `Dockerfile.fork` | The fork's tools image. Takes `BASE_IMAGE` as a build arg (default `hermes-agent:upstream`) and layers on: OSINT apt dependencies, pyenv with Python 3.11 and 3.12 for tools that need an older Python (the project venvs use a uv-managed CPython instead, see Step 6b below), a `chown -R hermes:hermes /opt/hermes/ui-tui`, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Both the gateway and the dashboard build from it |
 | `.env` (repo root, gitignored) | Compose-time values: the API keys the override forwards, and `HERMES_UID`/`HERMES_GID` on Linux. Auto-loaded by Compose for `${VAR}` substitution |
 | `.env.fork.example` | Committed template, copy to `.env` and fill |
 | `hermes-data/.env` (gitignored) | Runtime secrets that hermes and its child processes read directly. `DISCORD_BOT_TOKEN`, `MINIMAX_API_KEY` and `GITHUB_TOKEN` belong here rather than in the compose passthrough. See fork/NOTE-5-operations.md for why. Template: `hermes-data/.env.example` |
@@ -173,10 +173,18 @@ docker compose exec -u hermes gateway bash -lc "cd /opt/data/projects/osint && u
 
 The chain inside the quotes runs in the container's bash, not in your shell, so both blocks paste unchanged into PowerShell.
 
-On the minipc, run the same two commands from `/opt/docker-stack/hermes`. They pick up `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, see "Every docker compose command on the minipc uses both files" in fork/NOTE-6-minipc-proxmox.md.
+On the minipc, run the same two commands from `/opt/docker-stack/hermes`. They pick up `docker-compose.yml` plus `docker-compose.standalone.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, see "Every docker compose command on the minipc uses both files" in fork/NOTE-6-minipc-proxmox.md.
 
 Build them as the `hermes` user, not root, or the venvs land root-owned and the
 supervised gateway cannot use them.
+
+These venvs are not built on the pyenv Python. `bash -lc` starts a login shell, and the image's `/etc/profile` resets `PATH` to `/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games`, so neither `pyenv` nor `python3.11` is found there. `uv venv --python python3.11` then downloads a uv-managed CPython into `/opt/data/.local/share/uv/python/` (under the `hermes` user's home) and points the `.venv` at it. Every project `.venv` on the current machines works that way (crypto-monitor, osint, gmail-newsletter, job-seeker, grant-seeker, startup-seeker). That copy lives in `hermes-data/`, so it survives an image update.
+
+pyenv stays in the image, with Python 3.11 and 3.12 under `/opt/pyenv`, for AI tools that need a specific older Python. It is on `PATH` for the gateway process, because compose sets `PATH` with `/opt/pyenv/shims` and `/opt/pyenv/bin`, but not inside a `bash -lc` login shell. There, call it by full path, `/opt/pyenv/bin/pyenv`, or run an interpreter directly, `/opt/pyenv/versions/<version>/bin/python`. List the installed versions with:
+
+```bash
+docker compose exec -u hermes gateway /opt/pyenv/bin/pyenv versions
+```
 
 ### Step 7, verify
 

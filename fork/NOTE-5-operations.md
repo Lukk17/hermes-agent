@@ -8,7 +8,7 @@ Docker and git commands are identical in PowerShell and in a Unix shell, so they
 
 Every `docker compose` command in this note is written for the dev box that builds the images locally. Its `.env` has no `COMPOSE_FILE` line, so Compose uses `docker-compose.yml` plus the automatically merged `docker-compose.override.yml`.
 
-On the minipc the lifecycle, logs, `exec`, recreate and OAuth commands work unchanged, as long as they run from `/opt/docker-stack/hermes` and the minipc's `.env` carries the `COMPOSE_FILE` line that selects `docker-compose.yml` plus `docker-compose.minipc.yml`. How to add it is in "Every docker compose command on the minipc uses both files" in `fork/NOTE-6-minipc-proxmox.md`. The build commands are for the dev box only: "Build order", "Updating to the latest upstream", "Full clean rebuild" and the `docker compose build` row in the troubleshooting table. The minipc never builds, it pulls, see "Updating to a new upstream image" in `fork/NOTE-6-minipc-proxmox.md`.
+On the minipc the lifecycle, logs, `exec`, recreate and OAuth commands work unchanged, as long as they run from `/opt/docker-stack/hermes` and the minipc's `.env` carries the `COMPOSE_FILE` line that selects `docker-compose.yml` plus `docker-compose.standalone.yml`. How to add it is in "Every docker compose command on the minipc uses both files" in `fork/NOTE-6-minipc-proxmox.md`. The build commands are for the dev box only: "Build order", "Updating to the latest upstream", "Full clean rebuild" and the `docker compose build` row in the troubleshooting table. The minipc never builds, it pulls, see "Updating to a new upstream image" in `fork/NOTE-6-minipc-proxmox.md`.
 
 ### Container lifecycle
 

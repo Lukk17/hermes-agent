@@ -14,7 +14,7 @@ Everything hermes owns lives in one directory on your machine, `hermes-data/`, w
 
 `hermes-data/` is its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. This repo's own `.gitignore` ignores it wholesale with one line, `/hermes-data/`, so this repo never tracks a single byte of it. Inside that nested repository, `hermes-data/.gitignore` decides which of those files travel between machines the same way this repo's `.gitignore` used to: it ignores everything by default and then re-includes exactly the pieces worth carrying, `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, the top-level entry scripts `scripts/*.sh`, the runtime `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/` and `local/` folders, the `.env.example` template for `hermes-data/.env`, and `.gitignore` itself. Databases, logs, caches, OAuth tokens and `hermes-data/.env` stay on the machine that made them.
 
-That is what makes the intended workflow work. Use hermes on one machine, let it update its own SOUL and memories as it goes, then inside `hermes-data/`, `git commit` and `git push` to `hermes-projects`. On the other machine, `git pull` inside `hermes-data/` and `docker compose up -d` from the repo root, and the same persona, memories, cron jobs and projects are there with no setup step. On the minipc that `docker compose` runs on `docker-compose.yml` plus `docker-compose.minipc.yml`, selected by the `COMPOSE_FILE` line in its `.env`, never on the override (see `fork/NOTE-6-minipc-proxmox.md`).
+That is what makes the intended workflow work. Use hermes on one machine, let it update its own SOUL and memories as it goes, then inside `hermes-data/`, `git commit` and `git push` to `hermes-projects`. On the other machine, `git pull` inside `hermes-data/` and `docker compose up -d` from the repo root, and the same persona, memories, cron jobs and projects are there with no setup step. On the minipc that `docker compose` runs on `docker-compose.yml` plus `docker-compose.standalone.yml`, selected by the `COMPOSE_FILE` line in its `.env`, never on the override (see `fork/NOTE-6-minipc-proxmox.md`).
 
 One exception to hermes writing whatever it likes: `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh` are re-mounted read-only on top of the read-write parent. Hermes cannot rewrite them at runtime. To change either one, edit the file on the host and recreate the container.
 
@@ -25,7 +25,7 @@ Whenever a path appears below, `hermes-data/...` and anything else without a lea
 | File or directory | Purpose |
 |---|---|
 | `docker-compose.override.yml` | Auto-merged on top of upstream `docker-compose.yml`. Points `/opt/data` at `./hermes-data` instead of upstream's `~/.hermes`; re-mounts `./hermes-data/config.yaml` and `./hermes-data/scripts/crypto-monitor-daily.sh` read-only on top of it; adds `.agents/skills:/opt/data/external-skills:ro` and `./skills:/opt/data/bundled-skills:ro` for skill discovery; sets `HERMES_SKIP_CONFIG_MIGRATION=1` so the boot hook does not try to rewrite the read-only config; env passthrough for on-chain and OSINT keys; the dashboard loopback bind on `127.0.0.1:9119`; the `Dockerfile.fork` build for both services with `BASE_IMAGE=hermes-agent:upstream`; and the build-only `upstream-base` service that produces that base image. |
-| `Dockerfile.fork` | The fork's tools image, built on `BASE_IMAGE` (default `hermes-agent:upstream`, produced from the untouched upstream `Dockerfile`). Adds OSINT apt dependencies, pyenv with Python 3.11 (crypto-monitor) and 3.12 (osint), `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the dashboard's UI dist, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Used by BOTH the gateway and the dashboard service. |
+| `Dockerfile.fork` | The fork's tools image, built on `BASE_IMAGE` (default `hermes-agent:upstream`, produced from the untouched upstream `Dockerfile`). Adds OSINT apt dependencies, pyenv with Python 3.11 and 3.12 for tools that need an older Python (the project venvs use a uv-managed CPython instead, see Step 6b in `fork/NOTE-1-install.md`), `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the dashboard's UI dist, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Used by BOTH the gateway and the dashboard service. |
 | `.env` (gitignored) | Local-only secrets and tokens. Auto-loaded by Docker Compose for variable substitution in `docker-compose.override.yml`. |
 | `hermes-data/` | The whole of hermes' home directory, mounted at `/opt/data` in the container. Its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Holds tracked config and untracked runtime state side by side. This repo's own `.gitignore` ignores it wholesale with one line, so a rebase of this repo never touches it at all. |
 | `hermes-data/config.yaml` (tracked in `hermes-projects`) | Runtime config: model, provider, `skills.external_dirs`, Discord channel prompts. Re-mounted READ-ONLY in the container, so hermes cannot rewrite it. Edit on the host, recreate to apply. |
@@ -96,7 +96,7 @@ Full guide with screenshots and failure-mode table: see `fork/NOTE-3-discord.md`
 
 ## Bringing it up
 
-This sequence is for a dev box that builds the images locally, with no `COMPOSE_FILE` line in its `.env`, so Compose merges `docker-compose.override.yml` automatically. The minipc never builds and never uses the override: it pulls prebuilt images through `docker-compose.minipc.yml`, see `fork/NOTE-6-minipc-proxmox.md`.
+This sequence is for a dev box that builds the images locally, with no `COMPOSE_FILE` line in its `.env`, so Compose merges `docker-compose.override.yml` automatically. The minipc never builds and never uses the override: it pulls prebuilt images through `docker-compose.standalone.yml`, see `fork/NOTE-6-minipc-proxmox.md`.
 
 ```bash
 docker compose config
@@ -144,7 +144,7 @@ The recreate command, run from the repo root:
 docker compose up -d --force-recreate gateway dashboard
 ```
 
-On the minipc the same command works from `/opt/docker-stack/hermes`, where the `COMPOSE_FILE` line in its `.env` selects `docker-compose.yml` plus `docker-compose.minipc.yml`. There, a `Dockerfile.fork` change means a new image built and pushed from the dev box, then `docker compose pull` on the minipc, never a local build.
+On the minipc the same command works from `/opt/docker-stack/hermes`, where the `COMPOSE_FILE` line in its `.env` selects `docker-compose.yml` plus `docker-compose.standalone.yml`. There, a `Dockerfile.fork` change means a new image built and pushed from the dev box, then `docker compose pull` on the minipc, never a local build.
 
 A coding agent does NOT recreate the container itself. It says which file to change and whether a recreate is needed, then waits. See `fork/AGENTS.md` for the full editing protocol.
 
@@ -211,7 +211,7 @@ git fetch origin
 git checkout -f -b master origin/master
 ```
 
-On a machine that already has both clones, pull both and bring it up. On the minipc, run these from `/opt/docker-stack/hermes`, so the final `docker compose up -d` takes `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in its `.env` (see `fork/NOTE-6-minipc-proxmox.md`):
+On a machine that already has both clones, pull both and bring it up. On the minipc, run these from `/opt/docker-stack/hermes`, so the final `docker compose up -d` takes `docker-compose.yml` plus `docker-compose.standalone.yml` from the `COMPOSE_FILE` line in its `.env` (see `fork/NOTE-6-minipc-proxmox.md`):
 
 ```bash
 git pull
