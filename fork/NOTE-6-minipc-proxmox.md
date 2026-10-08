@@ -52,7 +52,7 @@ Ignored by `hermes-data/.gitignore`, and therefore per-machine:
 - `./hermes-data/auth.json`: OAuth tokens. Log in again on the minipc.
 - `./hermes-data/.env`: runtime secrets hermes and its child processes read.
 - `./hermes-data/projects/*/.venv/`: per-project virtualenvs, rebuilt in the container.
-- `./hermes-data/skills/.curator_backups/`, `skills/.usage.json.lock`, `skills/.curator_state`, `skills/.hub/audit.log`: curator snapshots, a lock file, the curator's per-machine last-run state and a log.
+- `./hermes-data/skills/.curator_backups/`, `skills/.usage.json.lock`, `skills/.curator_state`, `skills/.locks/`, `skills/.hub/audit.log`: curator snapshots, lock files, the curator's per-machine last-run state and a log.
 
 Plus, tracked in the fork repository's own root:
 
@@ -648,6 +648,7 @@ carrying between machines:
 /skills/.curator_backups/
 /skills/.usage.json.lock
 /skills/.curator_state
+/skills/.locks/
 /skills/.hub/audit.log
 **/data/*
 !projects/crypto-monitor/data/reports/
