@@ -68,7 +68,8 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 │   │   ├── grant-seeker/              #     one Discord channel worth of project
 │   │   ├── startup-seeker/            #     one Discord channel worth of project
 │   │   ├── home/                      #     one Discord channel worth of project
-│   │   └── dev/                       #     one Discord channel worth of project
+│   │   ├── dev/                       #     one Discord channel worth of project
+│   │   └── mana-pool/                 #     one Discord channel worth of project
 │   ├── scripts/*.sh                   #   top-level cron entry scripts, crypto-monitor-daily.sh re-mounted read-only
 │   ├── skills/                        #   skills installed at runtime (curator backups and state stay ignored)
 │   ├── plugins/  hooks/  skins/       #   plugins, hooks and skins added at runtime
