@@ -42,6 +42,8 @@ clone on the minipc:
 - `./hermes-data/scripts/*.sh`: the top-level cron entry scripts.
 - `./hermes-data/skills/`: skills hermes installed or wrote at runtime, with `.usage.json` and `.bundled_manifest`.
 - `./hermes-data/plugins/`, `hooks/`, `skins/`: plugins, hooks and skins added at runtime.
+- `./hermes-data/plans/`, `workspace/`, `local/`: plans, workspace and local folders written at runtime.
+- `./hermes-data/.env.example`: the template for `hermes-data/.env`, with placeholders and no real values.
 
 Ignored by `hermes-data/.gitignore`, and therefore per-machine:
 
@@ -154,7 +156,7 @@ needs:
 | Path on minipc | Source | Notes |
 |---|---|---|
 | `/opt/hermes-fork/` (the project root) | `git clone` of `hermes-agent` | the fork's own tracked content: `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml`, `Dockerfile.fork` |
-| `/opt/hermes-fork/hermes-data/` | `git clone` of the private `hermes-projects`, into the `hermes-data` subdirectory, before the first container start | `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/`, `projects/`, `scripts/`, `skills/`, `plugins/`, `hooks/`, `skins/` |
+| `/opt/hermes-fork/hermes-data/` | `git clone` of the private `hermes-projects`, into the `hermes-data` subdirectory, before the first container start | `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/`, `projects/`, `scripts/`, `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/`, `local/`, `.env.example` |
 | `/opt/hermes-fork/.env` | hand-written, from `.env.fork.example` | compose-time values and the container uid, gitignored |
 | `/opt/hermes-fork/hermes-data/.env` | hand-written | runtime secrets hermes child processes read, gitignored |
 
@@ -625,6 +627,7 @@ carrying between machines:
 ```
 /*
 !/.gitignore
+!/.env.example
 !/config.yaml
 !/SOUL.md
 !/cron
@@ -641,6 +644,9 @@ carrying between machines:
 !/plugins
 !/hooks
 !/skins
+!/plans
+!/workspace
+!/local
 /skills/.curator_backups/
 /skills/.usage.json.lock
 /skills/.curator_state

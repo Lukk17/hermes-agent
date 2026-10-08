@@ -62,10 +62,18 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 │   │   ├── crypto-monitor/            #     one Discord channel worth of project
 │   │   ├── osint/                     #     one Discord channel worth of project
 │   │   ├── research/                  #     one Discord channel worth of project
-│   │   └── daily/                     #     one Discord channel worth of project
+│   │   ├── daily/                     #     one Discord channel worth of project
+│   │   ├── gmail-newsletter/          #     one Discord channel worth of project
+│   │   ├── job-seeker/                #     one Discord channel worth of project
+│   │   ├── grant-seeker/              #     one Discord channel worth of project
+│   │   ├── startup-seeker/            #     one Discord channel worth of project
+│   │   ├── home/                      #     one Discord channel worth of project
+│   │   └── dev/                       #     one Discord channel worth of project
 │   ├── scripts/*.sh                   #   top-level cron entry scripts, crypto-monitor-daily.sh re-mounted read-only
 │   ├── skills/                        #   skills installed at runtime (curator backups and state stay ignored)
 │   ├── plugins/  hooks/  skins/       #   plugins, hooks and skins added at runtime
+│   ├── plans/  workspace/  local/     #   plans, workspace and local folders written at runtime
+│   ├── .env.example                   #   template for hermes-data/.env, no real values
 │   │                                  # IGNORED by hermes-data's OWN .gitignore (per-machine, never
 │   │                                  # enters either git repo):
 │   ├── .env                           #   secrets that hermes child processes need
@@ -77,7 +85,7 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 └── .agents/skills/                    # curated user-authored skills (mirror of agent-standards)
 ```
 
-The rule that makes this layout readable: `hermes-data/` is the container's home directory, bind-mounted whole at `/opt/data`. There is no Docker volume and no per-file mount of a config directory. `hermes-data/` is also its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. This repo's own `.gitignore` ignores it wholesale with one line, `/hermes-data/`, so this repo never tracks a single byte of it. Inside `hermes-data/`, its own `.gitignore` is what decides which files travel between machines: it ignores everything by default and then re-includes `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, the top-level entry scripts `scripts/*.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and `.gitignore` itself. So the agent writes wherever it likes under its own home, and the `hermes-projects` clone picks up only the parts worth carrying to another machine.
+The rule that makes this layout readable: `hermes-data/` is the container's home directory, bind-mounted whole at `/opt/data`. There is no Docker volume and no per-file mount of a config directory. `hermes-data/` is also its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. This repo's own `.gitignore` ignores it wholesale with one line, `/hermes-data/`, so this repo never tracks a single byte of it. Inside `hermes-data/`, its own `.gitignore` is what decides which files travel between machines: it ignores everything by default and then re-includes `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, the top-level entry scripts `scripts/*.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/`, `local/`, `.env.example`, and `.gitignore` itself. So the agent writes wherever it likes under its own home, and the `hermes-projects` clone picks up only the parts worth carrying to another machine.
 
 Two files inside that mount are re-mounted read-only on top of it, `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh`. A running hermes cannot rewrite either one. Changing them means editing the host file and recreating the container.
 
@@ -150,7 +158,7 @@ Hermes uses cron (`hermes-data/cron/jobs.json`), NOT heartbeat. Do not invent he
 - Everything at the repository root that is not fork-owned is upstream code, because the repository root IS the hermes-agent checkout. There is no `hermes-agent/` subdirectory to fence off. Concretely, do not patch: every top-level `*.py` (`run_agent.py`, `cli.py`, `model_tools.py`, `toolsets.py`, `hermes_constants.py`, `hermes_state*.py`, `utils.py`, `batch_runner.py`, `mcp_serve.py`, `setup.py`, and the rest), nor `agent/`, `gateway/`, `tools/`, `hermes_cli/`, `cron/`, `tui_gateway/`, `acp_adapter/`, `plugins/`, `providers/`, `skills/`, `optional-skills/`, `optional-mcps/`, `web/`, `ui-tui/`, `apps/`, `website/`, `docs/`, `scripts/`, `tests/`, `tests-js/`, `evals/`, `native/`, `nix/`, `locales/`, `docker/`, `assets/`, `contributors/`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `uv.lock`. Rebasing onto upstream merges their changes; we do not patch them in place unless the fork is the only way.
 - Fork-owned, and therefore editable: `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, this repo's `.gitignore`, `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`, `FORK.md`.
 - `hermes-data/` is its own nested git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. It is not part of this repo's tracked tree at all: this repo's `.gitignore` ignores it wholesale with one line, `/hermes-data/`. It still holds both tracked config and untracked runtime state side by side. Which is which is decided by `hermes-data/.gitignore`, not by the directory name, so check `git status` (run inside `hermes-data/`) before assuming a file there is throwaway.
-- Tracked by `hermes-data/.gitignore` and editable inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, the top-level entry scripts `scripts/*.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and `.gitignore` itself.
+- Tracked by `hermes-data/.gitignore` and editable inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, the top-level entry scripts `scripts/*.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/`, `local/`, `.env.example`, and `.gitignore` itself.
 - Ignored by `hermes-data/.gitignore`, and never to be committed or hand-edited: `hermes-data/state.db*` (SQLite sessions), `hermes-data/auth.json` (OAuth tokens), `hermes-data/.env` (secrets that hermes child processes read), and every log, cache, lock and session file beside them.
 - `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh` are re-mounted read-only inside the container. Hermes cannot rewrite them at runtime, and `HERMES_SKIP_CONFIG_MIGRATION=1` stops the boot hook trying. Edit them on the host and recreate the container.
 

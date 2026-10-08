@@ -46,8 +46,8 @@ This note covers a clean install from zero to working. For day-to-day operations
 | `Dockerfile.fork` | The fork's tools image. Takes `BASE_IMAGE` as a build arg (default `hermes-agent:upstream`) and layers on: OSINT apt dependencies, pyenv with Python 3.11 (crypto-monitor) and 3.12 (osint), a `chown -R hermes:hermes /opt/hermes/ui-tui`, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Both the gateway and the dashboard build from it |
 | `.env` (repo root, gitignored) | Compose-time values: the API keys the override forwards, and `HERMES_UID`/`HERMES_GID` on Linux. Auto-loaded by Compose for `${VAR}` substitution |
 | `.env.fork.example` | Committed template, copy to `.env` and fill |
-| `hermes-data/.env` (gitignored) | Runtime secrets that hermes and its child processes read directly. `DISCORD_BOT_TOKEN` and `MINIMAX_API_KEY` belong here rather than in the compose passthrough. See fork/NOTE-5-operations.md for why |
-| `hermes-data/` | Hermes' whole home directory, mounted at `/opt/data`. Its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Tracked inside that repository: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, the top-level entry scripts `scripts/*.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and its own `.gitignore`. Ignored inside it: `state.db`, `auth.json`, `.env`, `logs/`, `sessions/`, `cache/` and the rest of the runtime state. The fork repository ignores the whole directory with one line, `/hermes-data/`, so a rebase of the fork never touches it |
+| `hermes-data/.env` (gitignored) | Runtime secrets that hermes and its child processes read directly. `DISCORD_BOT_TOKEN`, `MINIMAX_API_KEY` and `GITHUB_TOKEN` belong here rather than in the compose passthrough. See fork/NOTE-5-operations.md for why. Template: `hermes-data/.env.example` |
+| `hermes-data/` | Hermes' whole home directory, mounted at `/opt/data`. Its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Tracked inside that repository: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, the top-level entry scripts `scripts/*.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/`, `local/`, `.env.example`, and its own `.gitignore`. Ignored inside it: `state.db`, `auth.json`, `.env`, `logs/`, `sessions/`, `cache/` and the rest of the runtime state. The fork repository ignores the whole directory with one line, `/hermes-data/`, so a rebase of the fork never touches it |
 | `.agents/skills/` | User-authored skill folders, read-only mount into the container as `/opt/data/external-skills`. Tracked in git, mirrors a curated subset of `Lukk17/agent-standards/.agents/skills/` |
 | `./skills/` | Bundled hermes skills, read-only mount into the container as `/opt/data/bundled-skills` |
 
@@ -234,6 +234,8 @@ Tracked inside `hermes-data/`'s own repository, so it travels to another machine
 - `./hermes-data/scripts/*.sh`: the top-level cron entry scripts. `crypto-monitor-daily.sh` is read-only inside the container
 - `./hermes-data/skills/`: skills hermes installs or writes at runtime, with `.usage.json` and `.bundled_manifest`. Curator backups and lock files inside it stay ignored
 - `./hermes-data/plugins/`, `./hermes-data/hooks/`, `./hermes-data/skins/`: plugins, hooks and skins added at runtime
+- `./hermes-data/plans/`, `./hermes-data/workspace/`, `./hermes-data/local/`: plans, workspace and local folders written at runtime
+- `./hermes-data/.env.example`: the template for `hermes-data/.env`, with placeholders and no real values
 
 Tracked by the fork repository itself, so it travels in the `hermes-agent` clone:
 

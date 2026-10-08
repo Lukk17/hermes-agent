@@ -45,6 +45,12 @@ services:
       # Gmail OAuth
       - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
       - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      # Separate Gmail account used by the gmail-newsletter project.
+      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
+
+      # Home Assistant
+      - HASS_URL=${HASS_URL}
+      - HASS_TOKEN=${HASS_TOKEN}
 
       # OSINT / threat-intel
       - HUNTER_API_KEY=${HUNTER_API_KEY}
@@ -61,6 +67,9 @@ services:
       - BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY=${BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY}
 
       - ASCEND_SCRAPPER_URL=${ASCEND_SCRAPPER_URL}
+
+      # startup-seeker (optional)
+      - PRODUCT_HUNT_API_KEY=${PRODUCT_HUNT_API_KEY}
 
   dashboard:
     build:
