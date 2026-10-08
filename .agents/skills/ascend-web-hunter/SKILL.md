@@ -1,9 +1,9 @@
 ---
-name: ascend-web-scrapper
+name: ascend-web-hunter
 description: Self-hosted web scraping service for job sites and other pages. Use when scraping job listings or any web pages.
 ---
 
-# Ascend Web Scrapper
+# Ascend Web Hunter
 
 Self-hosted web scraping service at `http://host.docker.internal:7021`.
 

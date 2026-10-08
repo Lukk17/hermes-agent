@@ -133,4 +133,4 @@ Load and follow these skills from `.agents/skills/` before acting. They contain 
 - `nextjs-app-router-patterns`
 - `frontend-design`
 - `web-accessibility`
-- `ascend-web-scrapper`
+- `ascend-web-hunter`

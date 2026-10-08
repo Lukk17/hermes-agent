@@ -76,7 +76,7 @@ Variables wired in (full list in `docker-compose.override.yml`):
 - On-chain: `BLOCKSCOUT_API_KEY`, `ALCHEMY_API_KEY`, `CRYPTOPANIC_API_KEY`
 - Gmail OAuth: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`
 - OSINT / threat-intel: `HUNTER_API_KEY`, `ABSTRACT_API_KEY`, `EMAILREP_API_KEY`, `NUMVERIFY_API_KEY`, `VIRUSTOTAL_API_KEY`, `URLSCAN_API_KEY`, `OTX_API_KEY`, `ABUSEIPDB_API_KEY`, `CENSYS_API_KEY`, `IPQS_API_KEY`, `DEHASHED_API_KEY`, `BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY`
-- Misc: `ASCEND_SCRAPPER_URL`
+- Misc: `ASCEND_WEB_HUNTER_URL` (base URL only, the client code appends `/api/v2/web/read`)
 
 To add another secret: append to `.env`, add `- VAR=${VAR}` under `gateway.environment:` in `docker-compose.override.yml`, recreate the gateway.
 
