@@ -63,7 +63,7 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 │   │   ├── osint/                     #     one Discord channel worth of project
 │   │   └── research/                  #     one Discord channel worth of project
 │   ├── scripts/crypto-monitor-daily.sh  # cron entry point, re-mounted read-only
-│   ├── skills/                        #   skills installed at runtime (curator backups stay ignored)
+│   ├── skills/                        #   skills installed at runtime (curator backups and state stay ignored)
 │   ├── plugins/  hooks/  skins/       #   plugins, hooks and skins added at runtime
 │   │                                  # IGNORED by hermes-data's OWN .gitignore (per-machine, never
 │   │                                  # enters either git repo):
