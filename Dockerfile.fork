@@ -80,13 +80,15 @@ RUN apt-get -o Acquire::Retries=3 update && \
 # only fire on the requested version.
 #
 # Use the official pyenv.run installer script (more reliable than git clone
-# when the network is flaky or rate-limited). PYENV_PYTHON_BUILD=1 makes
-# pyenv use uv's prebuilt-Python downloader instead of compiling from source,
-# so the 3.11 and 3.12 installs are 30-60 second downloads each rather than
-# 5-10 minute compiles. uv is already in the base image.
+# when the network is flaky or rate-limited). pyenv has no prebuilt-Python
+# downloader of its own (verified against pyenv/python-build's source: no
+# PYENV_PYTHON_BUILD variable exists anywhere in it), so `pyenv install`
+# compiles 3.11 and 3.12 from source via python-build, which already
+# parallelizes the make step across every core (`MAKE_OPTS="-j $(nproc)"` by
+# default) without any env var needed here. That compile is a one-time cost
+# absorbed into the image build, not a per-run cost.
 ENV PYENV_ROOT=/opt/pyenv
 ENV PATH="/opt/hermes/bin:/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ENV PYENV_PYTHON_BUILD=1
 RUN rm -rf /opt/pyenv && curl -fsSL https://pyenv.run | PYENV_ROOT=/opt/pyenv bash
 RUN pyenv --version
 RUN pyenv install 3.11 && \
@@ -103,11 +105,16 @@ RUN chown -R hermes:hermes /opt/hermes/ui-tui
 
 # ---------- /opt/data/.local/bin/hermes symlink ----------
 # The hermes doctor checks for `~/.local/bin/hermes` to confirm the `hermes`
-# command is callable outside the venv. The hermes user's HOME inside the
-# container is /opt/data (per upstream Dockerfile ENV HERMES_HOME=/opt/data),
-# so this is /opt/data/.local/bin/hermes. Symlink to the venv binary. Also
-# owned by the hermes user so the doctor check passes without the
-# permission-denied warning.
-RUN mkdir -p /opt/data/.local/bin &&     ln -sf /opt/hermes/.venv/bin/hermes /opt/data/.local/bin/hermes &&     chown -R hermes:hermes /opt/data/.local/bin
+# command is callable outside the venv (Path.home() resolves to /opt/data,
+# the hermes user's HOME per the upstream Dockerfile's
+# `useradd -d /opt/data hermes`). Creating this symlink here, at image build
+# time, does NOT survive: ./hermes-data:/opt/data bind-mounts a host
+# directory over the whole of /opt/data at container start, which replaces
+# the image layer's symlink with nothing, so `hermes doctor` reported it
+# missing despite this very block having created it. The fix lives in a
+# cont-init.d script instead (fork/docker/03-fork-local-bin-symlink), which
+# runs against the live, mounted filesystem on every container start.
+COPY fork/docker/03-fork-local-bin-symlink /etc/cont-init.d/03-fork-local-bin-symlink
+RUN chmod +x /etc/cont-init.d/03-fork-local-bin-symlink
 
 USER root

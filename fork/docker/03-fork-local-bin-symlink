@@ -1,0 +1,24 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+# Recreates /opt/data/.local/bin/hermes on every container start, after the
+# hermes-data bind mount has taken over /opt/data.
+#
+# Dockerfile.fork used to create this symlink at build time, baked into the
+# image layer. The hermes-data bind mount (./hermes-data:/opt/data) replaces
+# the whole /opt/data tree at container start, which hides that image-layer
+# symlink completely, so `hermes doctor` reported "~/.local/bin/hermes not
+# found" even though the Dockerfile had created it. Recreating it here, as a
+# cont-init.d script that runs against the live, mounted filesystem, is what
+# actually survives.
+#
+# Runs after 01-hermes-setup (the stage2 hook) so the HERMES_UID/HERMES_GID
+# remap via usermod/groupmod has already settled, and "hermes:hermes" below
+# resolves to the final, remapped ids rather than the image-default ones.
+
+set -eu
+
+mkdir -p /opt/data/.local/bin
+ln -sf /opt/hermes/.venv/bin/hermes /opt/data/.local/bin/hermes
+chown -R hermes:hermes /opt/data/.local
+
+echo "[fork-local-bin-symlink] relinked /opt/data/.local/bin/hermes"
