@@ -47,7 +47,7 @@ This note covers a clean install from zero to working. For day-to-day operations
 | `.env` (repo root, gitignored) | Compose-time values: the API keys the override forwards, and `HERMES_UID`/`HERMES_GID` on Linux. Auto-loaded by Compose for `${VAR}` substitution |
 | `.env.fork.example` | Committed template, copy to `.env` and fill |
 | `hermes-data/.env` (gitignored) | Runtime secrets that hermes and its child processes read directly. `DISCORD_BOT_TOKEN` and `MINIMAX_API_KEY` belong here rather than in the compose passthrough. See fork/NOTE-5-operations.md for why |
-| `hermes-data/` | Hermes' whole home directory, mounted at `/opt/data`. Its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Tracked inside that repository: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, `scripts/crypto-monitor-daily.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and its own `.gitignore`. Ignored inside it: `state.db`, `auth.json`, `.env`, `logs/`, `sessions/`, `cache/` and the rest of the runtime state. The fork repository ignores the whole directory with one line, `/hermes-data/`, so a rebase of the fork never touches it |
+| `hermes-data/` | Hermes' whole home directory, mounted at `/opt/data`. Its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Tracked inside that repository: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, the top-level entry scripts `scripts/*.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and its own `.gitignore`. Ignored inside it: `state.db`, `auth.json`, `.env`, `logs/`, `sessions/`, `cache/` and the rest of the runtime state. The fork repository ignores the whole directory with one line, `/hermes-data/`, so a rebase of the fork never touches it |
 | `.agents/skills/` | User-authored skill folders, read-only mount into the container as `/opt/data/external-skills`. Tracked in git, mirrors a curated subset of `Lukk17/agent-standards/.agents/skills/` |
 | `./skills/` | Bundled hermes skills, read-only mount into the container as `/opt/data/bundled-skills` |
 
@@ -231,7 +231,7 @@ Tracked inside `hermes-data/`'s own repository, so it travels to another machine
 - `./hermes-data/cron/jobs.json`: scheduled jobs
 - `./hermes-data/memories/MEMORY.md` and `USER.md`: the memory subsystem's files
 - `./hermes-data/projects/`: project workspaces, one subdir per Discord channel
-- `./hermes-data/scripts/crypto-monitor-daily.sh`: the cron job's entry point. Read-only inside the container
+- `./hermes-data/scripts/*.sh`: the top-level cron entry scripts. `crypto-monitor-daily.sh` is read-only inside the container
 - `./hermes-data/skills/`: skills hermes installs or writes at runtime, with `.usage.json` and `.bundled_manifest`. Curator backups and lock files inside it stay ignored
 - `./hermes-data/plugins/`, `./hermes-data/hooks/`, `./hermes-data/skins/`: plugins, hooks and skins added at runtime
 

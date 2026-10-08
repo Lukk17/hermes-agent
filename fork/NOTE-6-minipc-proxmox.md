@@ -39,7 +39,7 @@ clone on the minipc:
 - `./hermes-data/cron/jobs.json`: the schedule.
 - `./hermes-data/memories/MEMORY.md` and `USER.md`: what hermes has learned.
 - `./hermes-data/projects/`: the project workspaces.
-- `./hermes-data/scripts/crypto-monitor-daily.sh`: the cron entry point.
+- `./hermes-data/scripts/*.sh`: the top-level cron entry scripts.
 - `./hermes-data/skills/`: skills hermes installed or wrote at runtime, with `.usage.json` and `.bundled_manifest`.
 - `./hermes-data/plugins/`, `hooks/`, `skins/`: plugins, hooks and skins added at runtime.
 
@@ -636,7 +636,7 @@ carrying between machines:
 !/projects
 !/scripts
 /scripts/*
-!/scripts/crypto-monitor-daily.sh
+!/scripts/*.sh
 !/skills
 !/plugins
 !/hooks

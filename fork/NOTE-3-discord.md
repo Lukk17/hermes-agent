@@ -80,8 +80,8 @@ The live values in this fork:
 ```yaml
 discord:
   require_mention: false
-  free_response_channels: <four channel IDs, comma-separated>
-  allowed_channels: <the same four channel IDs>
+  free_response_channels: <every channel ID, comma-separated>
+  allowed_channels: <the same channel IDs>
   auto_thread: false
   reactions: true
   allow_all_users: true
@@ -94,6 +94,8 @@ discord:
       ...
     '<research-channel-id>': |
       ...
+    '<daily-channel-id>': |
+      ...
   server_actions: ''
 ```
 
@@ -101,7 +103,31 @@ Precedence, so you know which one you are actually changing: the adapter reads t
 
 Access control in this fork is `allow_all_users: true` under `discord:`. The alternative is to drop that and list Discord user IDs under `discord.allow_from` instead. Without one of the two, the gateway denies every sender. `GATEWAY_ALLOW_ALL_USERS` still works as a gateway-wide equivalent, but it is env-only with no `config.yaml` key, so prefer the Discord one.
 
-Standing condition for this deployment: `allow_all_users: true` means anyone who can post in the four channels listed in `discord.allowed_channels` gets an agent with shell and filesystem access inside the container. That is deliberate, and it is only safe while those four channels stay private. If any of them is opened up, or the bot joins another server, switch to `allow_from` with your own user ID first.
+Standing condition for this deployment: `allow_all_users: true` means anyone who can post in the channels listed in `discord.allowed_channels` gets an agent with shell and filesystem access inside the container. That is deliberate, and it is only safe while those channels stay private. If any of them is opened up, or the bot joins another server, switch to `allow_from` with your own user ID first.
+
+#### Adding a new Discord channel
+
+A new channel touches several files, and missing one gives a bot that is silent in the channel, or other channels that never send users there. Change every place below, in this order.
+
+1. `hermes-data/config.yaml`, `discord.allowed_channels`: append the channel ID. This list is a whitelist, so a channel missing from it gets no reply at all.
+2. `hermes-data/config.yaml`, `discord.free_response_channels`: append the same ID, so the bot answers without an `@mention`.
+3. `hermes-data/config.yaml`, `discord.channel_prompts`: add an entry keyed by the quoted channel ID. Follow the structure of the existing prompts: who Hermes is in this channel, the project workspace and its `AGENTS.md` to read at session start, the operating principles, and the same `Posting:` paragraph the other prompts end with.
+4. Every other channel prompt that names channels. The general channel prompt lists the project channels twice, once in the operating principles and once in its closing paragraph. Add the new channel to both.
+5. `hermes-data/projects/<name>/AGENTS.md`: create the project folder and its `AGENTS.md`, modeled on an existing project.
+6. `hermes-data/projects/AGENTS.md`: the channel to workspace list, the path layout tree, and the Discord channel mapping table all list the projects.
+7. `FORK.md`: the project list in the `hermes-data/projects/` row. `fork/AGENTS.md`: the `projects/` part of the repository structure tree.
+8. Any other doc that lists channels or projects, including the `config.yaml` example earlier in this note. Search for an existing channel and its project folder to find them:
+
+```bash
+git grep -n -e "hermes-research" -e "research/" -- fork FORK.md
+```
+
+```bash
+git -C hermes-data grep -n -e "hermes-research" -e "research/" -- config.yaml projects/AGENTS.md
+```
+
+9. If scheduled jobs post to the channel, set each job's `deliver` field in `hermes-data/cron/jobs.json` to `discord:<channel-id>`.
+10. Recreate the container. `config.yaml` is mounted read-only and read once at startup, so nothing changes until the recreate described under "Bring it up" below.
 
 #### What compose forwards
 
@@ -183,7 +209,7 @@ The Discord section should show connected.
 | Bot connects as the wrong bot (e.g. `AscendClaw` instead of `AscendHermes`) | The token in `hermes-data/.env` belongs to the other application. A shell or Windows-registry `DISCORD_BOT_TOKEN` cannot cause this any more, because hermes loads that file with `override=True` and it wins over anything inherited from the environment | Reset the intended bot's token in the Developer Portal and paste it into `hermes-data/.env`, then restart the gateway. The login line in `hermes-data/logs/gateway.log` names the application it actually connected as, so check that rather than guessing |
 | Bot never appeared in your server's member list | Invite URL was never opened, or the wrong scopes were selected | Re-open the OAuth2 URL Generator URL with `bot` in Scopes and the required permissions, authorize the bot to the server again |
 | `user not in DISCORD_ALLOWED_USERS / DISCORD_ALLOWED_ROLES` in logs | An allowlist is in force and your ID is not on it. The message names the env var even when the value came from `config.yaml`, because the loader bridges `discord.allow_from` into that variable, so it will send you to the wrong file if you take it literally | In `hermes-data/config.yaml` under `discord:`, either set `allow_all_users: true` (what this fork ships) or add your Discord user ID to `allow_from`. Then recreate, because `config.yaml` is read once at startup and is mounted read-only |
-| Bot replies to DMs but not in a server channel | `require_mention` is on (upstream default) and you did not `@mention` it, or the channel is not in `discord.free_response_channels`. This fork sets `require_mention: false` and lists four channels, so the usual cause here is a channel that is not on either list | `@mention` it, or add the channel ID to `discord.free_response_channels` and `discord.allowed_channels` in `hermes-data/config.yaml`, then recreate |
+| Bot replies to DMs but not in a server channel | `require_mention` is on (upstream default) and you did not `@mention` it, or the channel is not in `discord.free_response_channels`. This fork sets `require_mention: false` and lists every channel it uses, so the usual cause here is a channel that is not on either list | `@mention` it, or add the channel ID to `discord.free_response_channels` and `discord.allowed_channels` in `hermes-data/config.yaml`, then recreate |
 | Bot online and authorized, silent in one specific channel | That channel ID is missing from `discord.allowed_channels`, which is a whitelist: when it is non-empty the bot answers ONLY in the channels it lists | Add the channel ID to `discord.allowed_channels`, and to `discord.free_response_channels` too if you want it to answer without a mention, then recreate |
 | "scopes not valid" warning in Developer Portal | `Requires OAuth2 Code Grant` was enabled in the `Bot` tab, or `Install Link` is set to `None` in the `Installation` tab | Uncheck `Requires OAuth2 Code Grant` in the `Bot` tab (Authorization section), ignore the `Installation` tab (the invite URL comes from `OAuth2 > URL Generator` instead) |
 | "You must specify at least one URI for authentication to work" warning | Caused by enabling `Requires OAuth2 Code Grant` for a bot that does not use it | Uncheck it in the `Bot` tab. No URI needed for bot installation. |
