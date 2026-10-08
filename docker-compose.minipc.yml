@@ -1,0 +1,102 @@
+#
+# docker-compose.minipc.yml, minipc overlay for docker-compose.yml
+#
+# The minipc pulls prebuilt images from Docker Hub instead of building, and
+# needs the override's volume/env wiring without pulling in the override's
+# build: blocks. Select this file explicitly with -f so Compose's automatic
+# docker-compose.override.yml merge never kicks in:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.minipc.yml up -d
+#
+# or export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml once
+# per shell. See fork/NOTE-6-minipc-proxmox.md.
+#
+# Both images are pinned to :latest on purpose: the user keeps :latest always
+# pointing at a working build, so this file never needs an edit on a version
+# update. `docker compose pull` picks up the newest image.
+#
+# `!reset null` drops docker-compose.yml's build: block entirely rather than
+# merging alongside it (verified with `docker compose config`: no build: key
+# survives). `!override` replaces the base file's volumes: list outright
+# instead of concatenating, since the base mounts ~/.hermes and this file
+# mounts ./hermes-data at the same target.
+#
+# The gateway's environment: block deliberately spells out each key with
+# ${VAR} substitution instead of `env_file: .env`. `env_file:` would also
+# push DISCORD_BOT_TOKEN and MINIMAX_API_KEY into the gateway's own process
+# environment, which the override intentionally keeps out (they belong only
+# in hermes-data/.env, which the gateway and every child it spawns re-reads
+# at startup). If hermes-data/.env's own loader does not force-override an
+# already-set variable, a stray repo-root value here would silently win.
+# Keep this list in sync with docker-compose.override.yml's gateway
+# environment: block when a new secret is added.
+#
+services:
+  gateway:
+    build: !reset null
+    image: lukk17/hermes-agent-gateway:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes: !override
+      - ./hermes-data:/opt/data
+      # Re-mounted read-only on top of the read-write parent so a running
+      # hermes cannot rewrite the tracked config. A container recreate is the
+      # only way this file changes.
+      - ./hermes-data/config.yaml:/opt/data/config.yaml:ro
+      - ./.agents/skills:/opt/data/external-skills:ro
+      - ./skills:/opt/data/bundled-skills:ro
+      # Cron entry point, same recreate-only treatment as config.yaml.
+      - ./hermes-data/scripts/crypto-monitor-daily.sh:/opt/data/scripts/crypto-monitor-daily.sh:ro
+    environment:
+      - PATH=/opt/hermes/bin:/opt/pyenv/shims:/opt/pyenv/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:/usr/local/bin:/usr/bin:/bin
+      # Behavioural Discord setting, not a secret, so it is not in .env.
+      # See docker-compose.override.yml for the full reasoning.
+      - DISCORD_COMMAND_SYNC_POLICY=${DISCORD_COMMAND_SYNC_POLICY:-off}
+      # The boot-time schema migration writes config.yaml and a .bak- copy
+      # beside it. Both are impossible under the read-only mount, so skip it
+      # and migrate on the host instead.
+      - HERMES_SKIP_CONFIG_MIGRATION=1
+
+      # On-chain
+      - BLOCKSCOUT_API_KEY=${BLOCKSCOUT_API_KEY}
+      - ALCHEMY_API_KEY=${ALCHEMY_API_KEY}
+      - CRYPTOPANIC_API_KEY=${CRYPTOPANIC_API_KEY}
+
+      # Gmail OAuth
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      # Separate Gmail account used by the gmail-newsletter project.
+      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
+
+      # Home Assistant
+      - HASS_URL=${HASS_URL}
+      - HASS_TOKEN=${HASS_TOKEN}
+
+      # OSINT / threat-intel
+      - HUNTER_API_KEY=${HUNTER_API_KEY}
+      - ABSTRACT_API_KEY=${ABSTRACT_API_KEY}
+      - EMAILREP_API_KEY=${EMAILREP_API_KEY}
+      - NUMVERIFY_API_KEY=${NUMVERIFY_API_KEY}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+      - URLSCAN_API_KEY=${URLSCAN_API_KEY}
+      - OTX_API_KEY=${OTX_API_KEY}
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
+      - CENSYS_API_KEY=${CENSYS_API_KEY}
+      - IPQS_API_KEY=${IPQS_API_KEY}
+      - DEHASHED_API_KEY=${DEHASHED_API_KEY}
+      - BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY=${BREACHDIRECTORY_VIA_RAPIDAPI_API_KEY}
+
+      - ASCEND_WEB_HUNTER_URL=${ASCEND_WEB_HUNTER_URL}
+
+      # startup-seeker (optional)
+      - PRODUCT_HUNT_API_KEY=${PRODUCT_HUNT_API_KEY}
+
+  dashboard:
+    build: !reset null
+    image: lukk17/hermes-agent-dashboard:latest
+    volumes: !override
+      - ./hermes-data:/opt/data
+      - ./hermes-data/config.yaml:/opt/data/config.yaml:ro
+    environment:
+      - HERMES_SKIP_CONFIG_MIGRATION=1
+    command: ["dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open"]

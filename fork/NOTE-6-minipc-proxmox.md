@@ -2,20 +2,21 @@
 
 Assumes you have already followed `fork/NOTE-1-install.md` on a Windows or
 Linux dev box, you have built and pushed the images to Docker Hub, and you
-have a Proxmox VM with Debian 12+ and Docker Engine plus the Compose plugin
-v2.24+ installed and reachable on your LAN via SSH.
+have a Proxmox VM running Ubuntu Server LTS, reachable on your LAN via SSH.
+Docker Engine and the Compose plugin are not assumed to be installed yet.
+Installing them is the first step of the numbered sequence below.
 
 The goal of this note is the *minipc-specific* deltas: which files to copy,
 how to pull the prebuilt image instead of building from source, how to keep
-`.agents/skills/` in sync from your standards repo, the Proxmox networking
-gotcha, and the optional nginx reverse proxy if you want LAN browser access
-without an SSH tunnel.
+`.agents/skills/` in sync from your standards repo, and the Proxmox networking
+gotcha. Access to the minipc and to the dashboard is SSH only, there is no
+LAN-facing reverse proxy.
 
 ### Shell variants in this note
 
 Docker and git commands are identical in PowerShell and in a Unix shell, so they appear once, in a block tagged `bash`, and paste unchanged into PowerShell on Windows, into bash or zsh on Linux, and into zsh on macOS.
 
-Most of the rest of this note runs ON the minipc, in an SSH session, on Debian. Those blocks are Linux commands and deliberately have no PowerShell variant, because there is no Windows shell at the other end of the connection. The two places where a command runs on your own machine instead, the skills sync from `agent-standards` and the SSH tunnel, carry both variants.
+Most of the rest of this note runs ON the minipc, in an SSH session, on Ubuntu. Those blocks are Linux commands and deliberately have no PowerShell variant, because there is no Windows shell at the other end of the connection. The two places where a command runs on your own machine instead, the skills sync from `agent-standards` and the SSH tunnel, carry both variants.
 
 ### Repo-as-deployable-unit
 
@@ -102,7 +103,7 @@ git push
 On the minipc:
 
 ```bash
-cd /opt/hermes-fork/hermes-data
+cd /opt/docker-stack/hermes/hermes-data
 ```
 
 ```bash
@@ -136,8 +137,7 @@ one box authoritative, or pull before you start a session on the other.
 ```
 
 The VM must use **bridged networking** in Proxmox, not `internal network` or
-NAT. NAT gives the VM no LAN IP, which makes SSH from your laptop awkward and
-blocks any future nginx reverse proxy.
+NAT. NAT gives the VM no LAN IP, which makes SSH from your laptop awkward.
 
 Verify the VM has a real LAN IP:
 
@@ -155,102 +155,12 @@ needs:
 
 | Path on minipc | Source | Notes |
 |---|---|---|
-| `/opt/hermes-fork/` (the project root) | `git clone` of `hermes-agent` | the fork's own tracked content: `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml`, `Dockerfile.fork` |
-| `/opt/hermes-fork/hermes-data/` | `git clone` of the private `hermes-projects`, into the `hermes-data` subdirectory, before the first container start | `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/`, `projects/`, `scripts/`, `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/`, `local/`, `.env.example` |
-| `/opt/hermes-fork/.env` | hand-written, from `.env.fork.example` | compose-time values and the container uid, gitignored |
-| `/opt/hermes-fork/hermes-data/.env` | hand-written | runtime secrets hermes child processes read, gitignored |
+| `/opt/docker-stack/hermes/` (the project root) | `git clone` of `hermes-agent` | the fork's own tracked content: `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml`, `docker-compose.minipc.yml`, `Dockerfile.fork` |
+| `/opt/docker-stack/hermes/hermes-data/` | `git clone` of the private `hermes-projects`, into the `hermes-data` subdirectory, before the first container start | `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/`, `projects/`, `scripts/`, `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/`, `local/`, `.env.example` |
+| `/opt/docker-stack/hermes/.env` | hand-written, from `.env.fork.example` | compose-time values and the container uid, gitignored |
+| `/opt/docker-stack/hermes/hermes-data/.env` | hand-written, from `hermes-data/.env.example` | runtime secrets hermes child processes read, gitignored |
 
 That is it. No rsync, no source tree, no `.venv`, no `node_modules`.
-
-Bootstrap on a fresh minipc. Every block below runs on the minipc over SSH, so
-each one is Linux-only:
-
-```bash
-sudo apt update
-```
-
-```bash
-sudo apt install -y docker.io docker-compose-plugin git
-```
-
-```bash
-sudo mkdir -p /opt/hermes-fork
-```
-
-```bash
-sudo chown $USER:$USER /opt/hermes-fork
-```
-
-```bash
-cd /opt/hermes-fork
-```
-
-```bash
-git clone https://github.com/Lukk17/hermes-agent.git .
-```
-
-`hermes-data/` is its own git repository, a clone of the private
-`Lukk17/hermes-projects` (branch `master`), not a submodule. Clone it next,
-before the first container start: `docker compose up` creates `hermes-data/`
-itself if it does not exist, and `git clone` refuses to clone into a
-directory that already has files in it. `hermes-projects` is private, so
-authenticate to GitHub on this machine first, either `gh auth login` or a
-credential helper backed by a personal access token:
-
-```bash
-gh auth login
-```
-
-```bash
-git clone https://github.com/Lukk17/hermes-projects.git hermes-data
-```
-
-```bash
-cp .env.fork.example .env
-```
-
-Fill in the API keys in `.env`. The Discord bot token does not belong here, it
-goes in `hermes-data/.env`, because hermes strips messaging and provider
-credentials from every subprocess it spawns and that file is the one each child
-re-reads at startup. Full reasoning in `fork/NOTE-3-discord.md`.
-
-Then pin the container's user id to yours. This matters on the minipc and not
-on a Windows dev box, because native Linux is the only host that passes real
-file ownership through a bind mount. The container drops to an internal
-`hermes` user, uid 10000 by default; if that uid does not own the checkout,
-every write the agent makes under `/opt/data` fails with EACCES, which covers
-`SOUL.md`, the memories, the cron jobs and every project file. Compose cannot
-run a shell, so it cannot work this out for itself. This one is Linux-only in a
-stronger sense than the rest of the note: it reads the calling user's numeric
-uid and gid, which Windows does not have, so there is no PowerShell version
-worth writing. Run it once, from the repo root, and compose reads `.env` on
-every `up` from then on:
-
-```bash
-printf 'HERMES_UID=%s\nHERMES_GID=%s\n' "$(id -u)" "$(id -g)" >> .env
-```
-
-Confirm it took effect after the first `up`:
-
-```bash
-docker compose exec gateway id
-```
-
-Then write `docker-compose.minipc.yml` as described in the next section. Only after that file exists can you pull, because pulling before it is in place would try to build or fetch the wrong images:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.minipc.yml pull
-```
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.minipc.yml up -d
-```
-
-Every later `docker compose` command on the minipc needs the same `-f` pair. Export it once per shell to avoid repeating it. `export` is a Unix shell builtin and this shell is on the minipc, so there is no PowerShell variant:
-
-```bash
-export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
-```
 
 ### Use a minipc-only compose file, not an edit to docker-compose.yml
 
@@ -260,8 +170,8 @@ becomes a rebase conflict on the next upstream sync. Do not edit
 `docker-compose.override.yml` either, because it is what the dev box builds
 with.
 
-Instead, add a third file, `docker-compose.minipc.yml`, tracked or hand-written
-on the minipc, and select it explicitly with `-f`. Compose applies files
+Instead, a third file, `docker-compose.minipc.yml`, is tracked in the fork
+repository and selected explicitly with `-f`. Compose applies files
 left-to-right, so the minipc file wins. It is NOT auto-merged the way
 `docker-compose.override.yml` is, and naming `-f` suppresses the automatic
 override merge, which is what you want here: the override carries `build:`
@@ -272,13 +182,17 @@ upstream image), `hermes-agent:fork` (gateway) and `hermes-agent:fork-dashboard`
 (dashboard). On Docker Hub they are published as
 `lukk17/hermes-agent-gateway` and `lukk17/hermes-agent-dashboard`.
 
-`docker-compose.minipc.yml` should:
+`docker-compose.minipc.yml`:
 
-- Replace `build:` with `image: lukk17/hermes-agent-gateway:<tag>` for the
-  gateway and `image: lukk17/hermes-agent-dashboard:<tag>` for the dashboard.
-  Pin a versioned tag for anything that must be reproducible; `:latest` only
-  for a scratch box.
-- Reproduce the volume set the override provides: `./hermes-data:/opt/data`,
+- Resets `build:` to nothing (`!reset null`) and replaces it with
+  `image: lukk17/hermes-agent-gateway:latest` for the gateway and
+  `image: lukk17/hermes-agent-dashboard:latest` for the dashboard. Both are
+  pinned to `:latest` on purpose, not a versioned tag: the user keeps `:latest`
+  always pointing at a working build, so this file never needs an edit on a
+  version update, and `docker compose pull` alone picks up the newest image.
+- Reproduces the volume set the override provides, with `!override` so the
+  list replaces the base file's `~/.hermes:/opt/data` mount instead of
+  concatenating with it: `./hermes-data:/opt/data`,
   `./.agents/skills:/opt/data/external-skills:ro`,
   `./skills:/opt/data/bundled-skills:ro`, plus the two read-only re-mounts on
   top of the first one, `./hermes-data/config.yaml:/opt/data/config.yaml:ro`
@@ -286,15 +200,19 @@ upstream image), `hermes-agent:fork` (gateway) and `hermes-agent:fork-dashboard`
   `./hermes-data/scripts/crypto-monitor-daily.sh:/opt/data/scripts/crypto-monitor-daily.sh:ro`.
   `SOUL.md`, `cron/jobs.json`, `memories/` and `projects/` need no line of
   their own, they are already inside the directory mount.
-- Set `HERMES_SKIP_CONFIG_MIGRATION=1` on both services. Without it the boot
+- Sets `HERMES_SKIP_CONFIG_MIGRATION=1` on both services. Without it the boot
   hook tries to rewrite the read-only `config.yaml` and fails.
-- Reproduce `extra_hosts: ["host.docker.internal:host-gateway"]` on the
+- Reproduces `extra_hosts: ["host.docker.internal:host-gateway"]` on the
   gateway.
-- Use `env_file: .env` instead of the override's per-key `environment:` block.
-  Compose auto-loads `.env` for `${VAR}` substitution, but `env_file:` also
-  pushes every variable into the container, which avoids maintaining two
-  parallel lists.
-- Keep `network_mode: host` and the dashboard command
+- Spells out each secret in the gateway's `environment:` block with `${VAR}`
+  substitution, the same keys as `docker-compose.override.yml`, rather than
+  `env_file: .env`. `env_file:` would also push `DISCORD_BOT_TOKEN` and
+  `MINIMAX_API_KEY` into the gateway's own process environment, which the
+  override intentionally keeps out of it, since those two live only in
+  `hermes-data/.env`. Keep the two lists in sync when a new secret is added
+  (see "Need a new key" in `fork/AGENTS.md`).
+- Keeps `network_mode: host` (inherited from `docker-compose.yml`, no line of
+  its own needed) and the dashboard command
   `["dashboard", "--host", "127.0.0.1", "--port", "9119", "--no-open"]`.
 
 The skills mount targets are `/opt/data/external-skills` and
@@ -302,8 +220,164 @@ The skills mount targets are `/opt/data/external-skills` and
 `hermes-data/config.yaml` points at; getting either wrong means the skills
 silently do not load.
 
-This file does not exist in the repo yet. Write it once on the minipc from the
-bullet list above and keep it there.
+Verify the merge did what it should before trusting it on a real machine,
+comparing against the dev box's override by key name only, never printing
+secret values:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.minipc.yml config --quiet
+```
+
+### Bootstrap on a fresh minipc
+
+Every block below runs on the minipc over SSH, so each one is Linux-only.
+
+1. Install Docker Engine from Docker's official repository, not the `docker.io`
+   package (it lags badly and ships no Compose plugin):
+
+   ```bash
+   sudo install -m 0755 -d /etc/apt/keyrings
+   ```
+
+   ```bash
+   sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+   ```
+
+   ```bash
+   sudo chmod a+r /etc/apt/keyrings/docker.asc
+   ```
+
+   ```bash
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   ```
+
+   ```bash
+   sudo apt update
+   ```
+
+   ```bash
+   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git
+   ```
+
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+
+   ```bash
+   newgrp docker
+   ```
+
+2. Authenticate to GitHub. `hermes-projects` is private, so this has to happen
+   before the clone in step 4:
+
+   ```bash
+   gh auth login
+   ```
+
+3. Create `/opt/docker-stack/hermes` and clone the fork into it:
+
+   ```bash
+   sudo mkdir -p /opt/docker-stack/hermes
+   ```
+
+   ```bash
+   sudo chown $USER:$USER /opt/docker-stack/hermes
+   ```
+
+   ```bash
+   cd /opt/docker-stack/hermes
+   ```
+
+   ```bash
+   git clone https://github.com/Lukk17/hermes-agent.git .
+   ```
+
+4. Clone `hermes-data` next, before the first container start: `docker compose
+   up` creates `hermes-data/` itself if it does not exist, and `git clone`
+   refuses to clone into a directory that already has files in it.
+   `hermes-data/` is its own git repository, a clone of the private
+   `Lukk17/hermes-projects` (branch `master`), not a submodule:
+
+   ```bash
+   git clone https://github.com/Lukk17/hermes-projects.git hermes-data
+   ```
+
+5. Copy both env templates and fill them in. `.env` at the repo root holds
+   compose-time values and the container uid. `hermes-data/.env` holds the
+   runtime secrets hermes and every child process it spawns re-reads at
+   startup, including the Discord bot token. Full reasoning in
+   `fork/NOTE-3-discord.md`:
+
+   ```bash
+   cp .env.fork.example .env
+   ```
+
+   ```bash
+   cp hermes-data/.env.example hermes-data/.env
+   ```
+
+   Fill in the values in both files, then pin the container's user id to
+   yours. This matters on the minipc and not on a Windows dev box, because
+   native Linux is the only host that passes real file ownership through a
+   bind mount. The container drops to an internal `hermes` user, uid 10000 by
+   default. If that uid does not own the checkout, every write the agent
+   makes under `/opt/data` fails with EACCES, which covers `SOUL.md`, the
+   memories, the cron jobs and every project file. Compose cannot run a
+   shell, so it cannot work this out for itself. Run it once, from the repo
+   root, and compose reads `.env` on every `up` from then on:
+
+   ```bash
+   printf 'HERMES_UID=%s\nHERMES_GID=%s\n' "$(id -u)" "$(id -g)" >> .env
+   ```
+
+6. Export the `COMPOSE_FILE` pair once per shell so every later `docker
+   compose` command on the minipc picks up both files without repeating `-f`:
+
+   ```bash
+   export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+   ```
+
+7. Pull the prebuilt images:
+
+   ```bash
+   docker compose pull
+   ```
+
+8. Start the containers:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   Confirm the uid mapping took effect:
+
+   ```bash
+   docker compose exec gateway id
+   ```
+
+9. Build each project's venv inside the container. Required, not optional:
+   see `fork/NOTE-1-install.md` step 6b for the exact commands, run them
+   against this container the same way.
+
+10. Configure an LLM provider and log in: see `fork/NOTE-2-llm-providers.md`.
+    Come back here once `hermes doctor` shows it logged in.
+
+11. Verify end to end:
+
+    ```bash
+    docker compose exec gateway hermes doctor
+    ```
+
+    ```bash
+    docker compose exec gateway hermes cron list
+    ```
+
+    Then send a real message to the bot from Discord and confirm it replies,
+    and check for errors:
+
+    ```bash
+    docker compose logs -f gateway
+    ```
 
 ### Sync skills from agent-standards
 
@@ -437,131 +511,22 @@ like `config.yaml`, `SOUL.md` and `projects/`. Commit it from inside
 `hermes-data/`. No new bind mount is needed: the directory is already inside
 the `/opt/data` mount.
 
-### Bring it up
+### Opening the dashboard
 
-```bash
-cd /opt/hermes-fork
-```
-
-```bash
-export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
-```
-
-```bash
-docker compose pull
-```
-
-```bash
-docker compose up -d
-```
-
-```bash
-docker compose logs -f gateway
-```
-
-```bash
-docker compose exec gateway hermes doctor
-```
-
-```bash
-docker compose exec gateway hermes skills list
-```
-
-```bash
-docker compose exec gateway hermes cron list
-```
-
-```bash
-docker compose exec gateway hermes plugins list
-```
-
-The dashboard is at `http://localhost:9119` **on the minipc itself only**.
-From your laptop, SSH tunnel (recommended):
+Access to the minipc is SSH only. There is no LAN-facing reverse proxy and no
+port 80 listener. The dashboard is at `http://localhost:9119` **on the minipc
+itself only**. From your laptop, SSH tunnel:
 
 ```bash
 ssh -L 9119:localhost:9119 user@<minipc-lan-ip>
 ```
 
-Then open `http://localhost:9119` in the browser on your laptop. This block runs on your laptop rather than on the minipc, and `ssh` is the same command in PowerShell on Windows, in bash or zsh on Linux, and in zsh on macOS, so one block covers all three.
-
-### LAN access without SSH (nginx, since you already run it)
-
-If you already maintain nginx on this Docker VM for other homelab apps, the
-cleanest way to expose Hermes on the LAN is a vhost with HTTP basic auth in
-front of the loopback-bound dashboard. Nothing about Hermes changes. nginx
-terminates the LAN-facing side; the dashboard still binds only to loopback
-inside the container.
-
-nginx site config (e.g. `/etc/nginx/sites-available/hermes.conf`):
-
-```nginx
-server {
-    listen 80;
-    server_name hermes.local;
-
-    # optional LAN-only listener, comment out if you also want it from anywhere
-    # listen 192.168.1.42:80;
-
-    # HTTP basic auth against an htpasswd file
-    auth_basic "Hermes Agent";
-    auth_basic_user_file /etc/nginx/.htpasswd;
-
-    location / {
-        proxy_pass http://127.0.0.1:9119;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Hermes dashboard uses websockets (TUI streaming)
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 1800s;   # matches agent.gateway_timeout
-    }
-}
-```
-
-Create the htpasswd file (one-time, replace `you`):
-
-```bash
-sudo apt install apache2-utils
-```
-
-```bash
-sudo htpasswd -c /etc/nginx/.htpasswd you
-```
-
-Point `hermes.local` at the minipc:
-
-- On the laptop's `/etc/hosts` (Linux/macOS) or
-  `C:\Windows\System32\drivers\etc\hosts`: `192.168.1.42  hermes.local`
-- Or run a local DNS resolver (Pi-hole, dnsmasq) on the LAN so every device
-  resolves it without per-host edits.
-
-Enable and reload:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/hermes.conf /etc/nginx/sites-enabled/
-```
-
-```bash
-sudo nginx -t
-```
-
-```bash
-sudo systemctl reload nginx
-```
-
-Open `http://hermes.local` from the laptop. nginx prompts for the basic-auth
-credentials, then forwards to the dashboard. Anyone on the LAN without the
-password is blocked at the nginx layer. Anyone outside the LAN cannot
-reach nginx at all (unless you also add a public DNS record and TLS, which
-is not recommended for this use case).
-
-If you ever want TLS without buying a cert, swap nginx for Caddy and use its
-`basicauth` + `auto_https` directives. Same trade-off, slightly more
-automation.
+Then open `http://localhost:9119` in the browser on your laptop. This block
+runs on your laptop rather than on the minipc, and `ssh` is the same command
+in PowerShell on Windows, in bash or zsh on Linux, and in zsh on macOS, so one
+block covers all three. See `fork/NOTE-4-secure-remote-access.md` for the
+general version of this tunnel and why `--insecure --host 0.0.0.0` is never
+the alternative.
 
 ### Proxmox-specific gotchas
 
@@ -576,22 +541,23 @@ automation.
   `du -sh ./hermes-data/` periodically.
 - **Resource caps.** Hermes plus Playwright Chromium can spike to 2GB RAM
   during a `terminal` session. Give the VM 4GB minimum, 8GB comfortable.
-- **Backups.** Add `./hermes-fork/hermes-data/` to Proxmox's backup schedule
-  (PBS or vzdump). One directory covers everything: the tracked half (config,
-  persona, cron, memories, projects) is also in `hermes-data`'s own git
-  repository (`hermes-projects`), and the untracked half (`state.db`
+- **Backups.** Add `/opt/docker-stack/hermes/hermes-data/` to Proxmox's backup
+  schedule (PBS or vzdump). One directory covers everything: the tracked half
+  (config, persona, cron, memories, projects) is also in `hermes-data`'s own
+  git repository (`hermes-projects`), and the untracked half (`state.db`
   sessions, `auth.json` OAuth, `kanban.db` board state, `.env`) exists
   nowhere else.
-- **Firewall.** If Proxmox enables a guest firewall by default, open port
-  22 (for SSH) and 80 (for nginx) at the Proxmox firewall level. Port 9119
-  stays loopback-only and never appears on the VM's interfaces.
+- **Firewall.** If Proxmox enables a guest firewall by default, open port 22
+  (for SSH) at the Proxmox firewall level. Port 9119 stays loopback-only,
+  reached only through the SSH tunnel above, and never appears on the VM's
+  interfaces.
 
 ### Updating to a new upstream image
 
 After you push a new build to Docker Hub from the dev box:
 
 ```bash
-cd /opt/hermes-fork
+cd /opt/docker-stack/hermes
 ```
 
 ```bash
@@ -651,7 +617,9 @@ carrying between machines:
 /skills/.usage.json.lock
 /skills/.curator_state
 /skills/.hub/audit.log
-data/
+**/data/*
+!projects/crypto-monitor/data/reports/
+!projects/crypto-monitor/data/reports/**
 ```
 
 The re-include pairs look repetitive on purpose. Git will not look inside an

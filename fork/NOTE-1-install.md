@@ -218,7 +218,7 @@ On the host running Docker:
 http://localhost:9119
 ```
 
-From another machine on your LAN or remote, SSH tunnel (see fork/NOTE-4-secure-remote-access.md) or nginx with basic auth (see fork/NOTE-6-minipc-proxmox.md).
+From another machine on your LAN or remote, SSH tunnel (see fork/NOTE-4-secure-remote-access.md, or fork/NOTE-6-minipc-proxmox.md for the minipc-specific tunnel).
 
 ### Where state lives
 

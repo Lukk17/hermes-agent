@@ -17,6 +17,8 @@ The exception is the image tag in step 6, which is held in a shell variable, and
 
 Hermes upstream uses `main` (not `master`) since late 2025. This fork was originally cloned from a `master`-named upstream and stays on `master` by choice.
 
+`docker-compose.windows.yml` is unrelated to this workflow. It is upstream's own Windows Docker Desktop compose variant and is untouched by a rebase.
+
 ## Image tag layout
 
 After each update cycle, the built images carry these names:
@@ -92,17 +94,80 @@ v2026.7.7
 
 Pick the one you want to consume. The date format embedded in the tag is `vYYYY.M.D` (year.month.day), with optional `.2` patch suffix.
 
-### 2. Switch to master and rebase onto the chosen tag
+### 2. Back up master, then rebase in a worktree
+
+Create a backup branch before touching anything. A rebase that goes wrong is
+then one `git reset` away from undone:
 
 ```bash
-git checkout master
+git branch backup/master-pre-v2026.8.27 master
+```
+
+Older commits on this fork's history still touch paths under `hermes-data/`,
+from before that directory became its own nested git repository. Rebasing
+those commits in the main checkout fails with "untracked working tree files
+would be overwritten," because the checkout's real `hermes-data/` (a separate
+git repository, ignored by this repo's own `.gitignore`) sits exactly where
+the old commit wants to write. Do the rebase in a `git worktree` instead, a
+second checkout of the same repository with its own working directory and no
+`hermes-data/` clone inside it, so there is nothing in the way. `master` is
+already checked out in the main worktree, so give the worktree a new branch
+name rather than reusing `master`:
+
+```bash
+git worktree add ../hermes-agent-rebase -b rebase/v2026.8.27 master
 ```
 
 ```bash
-git rebase v2026.8.27
+cd ../hermes-agent-rebase
 ```
 
-`git rebase` walks every commit upstream made between your fork base and `v2026.8.27` and replays your fork commits on top. With this fork's history being a few small commits and `v2026.8.27` being thousands of upstream commits ahead, expect conflicts only on files the fork actually modifies. The full fork-owned set is:
+`git rebase` walks every commit upstream made between your fork base and
+`v2026.8.27` and replays your fork commits on top. With this fork's history
+being a few small commits and `v2026.8.27` being thousands of upstream commits
+ahead, expect conflicts only on files the fork actually modifies.
+
+Rebase also rewrites the committer date of every replayed commit to the
+current time, which conflicts with this project's backdating rule (author
+date and committer date must match). Pass `--committer-date-is-author-date`
+so each replayed commit keeps its original committer date instead of picking
+up the time the rebase ran:
+
+```bash
+git rebase --committer-date-is-author-date v2026.8.27
+```
+
+If a commit's committer date was already wrong before this rebase (for
+example, rewritten by an earlier tool that did not carry this flag), fix it
+after the fact instead, on that one commit, with a filter rather than by
+rebasing again:
+
+```bash
+git filter-branch --env-filter 'if [ "$GIT_COMMIT" = "<sha>" ]; then export GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"; fi' -- <sha>^..<sha>
+```
+
+Resolve conflicts below in this worktree, same as in the main checkout. Once
+`git rebase --continue` finishes cleanly, go back to the main checkout,
+fast-forward `master` onto `rebase/v2026.8.27`, then remove the worktree and
+the temporary branch:
+
+```bash
+cd ../hermes-agent
+```
+
+```bash
+git merge --ff-only rebase/v2026.8.27
+```
+
+```bash
+git worktree remove ../hermes-agent-rebase
+```
+
+```bash
+git branch -d rebase/v2026.8.27
+```
+
+The full fork-owned set, the files a conflict can actually appear in, is:
 
 - `docker-compose.override.yml`, `Dockerfile.fork`
 - `.gitignore` (the fork appends one line ignoring `/hermes-data/` wholesale, on top of upstream's)
@@ -133,7 +198,8 @@ git add resolved-path
 git rebase --continue
 ```
 
-If you get stuck at any point:
+If you get stuck at any point, both commands below run in the worktree, not
+the main checkout, so `master` itself has not moved yet either way:
 
 Back to where you started:
 
@@ -145,6 +211,22 @@ Drop the upstream commit entirely, a last resort:
 
 ```bash
 git rebase --skip
+```
+
+If the worktree is unrecoverable, delete it and start over from step 2. The
+`backup/master-pre-v2026.8.27` branch and the untouched `master` are both
+still there:
+
+```bash
+cd ../hermes-agent
+```
+
+```bash
+git worktree remove --force ../hermes-agent-rebase
+```
+
+```bash
+git branch -D rebase/v2026.8.27
 ```
 
 ### 4. Sanity-check the resolved tree
@@ -234,16 +316,21 @@ fork-built image carries two Docker Hub tags. Use the versioned one
 
 ### 7. Update the minipc to consume the new image
 
+The minipc needs no compose change for this. `docker-compose.minipc.yml`
+pins both services to `:latest`, and step 6 just moved that tag to the new
+build, so `git pull` on the minipc is only there to pick up a fork doc or
+compose-file change, never to touch an image reference.
+
 Open a session on the minipc. `ssh` is the same command in PowerShell and in a Unix shell:
 
 ```bash
 ssh user@minipc
 ```
 
-Everything from here to the end of this step runs inside that SSH session, on Debian, so those blocks are Linux-only and have no PowerShell variant:
+Everything from here to the end of this step runs inside that SSH session, on Ubuntu, so those blocks are Linux-only and have no PowerShell variant:
 
 ```bash
-cd /opt/hermes-fork
+cd /opt/docker-stack/hermes
 ```
 
 ```bash
@@ -273,20 +360,36 @@ docker compose exec gateway hermes cron list
 The `COMPOSE_FILE` pair matters: `docker-compose.minipc.yml` is what replaces the
 `build:` blocks with registry images. See `fork/NOTE-6-minipc-proxmox.md`.
 
-If anything fails after the upgrade, roll back by pinning the previous image tag:
-
-Edit `docker-compose.minipc.yml` on the minipc, set the gateway's `image:` to
-`lukk17/hermes-agent-gateway:v2026.8.19-lukk`, then:
+If anything fails after the upgrade, roll back by moving `:latest` itself back
+to the previous good build, on the dev box, not by editing
+`docker-compose.minipc.yml` on the minipc. The file stays pinned to `:latest`
+either way, which is the point of pinning it there in the first place:
 
 ```bash
-docker compose pull gateway
+docker pull lukk17/hermes-agent-gateway:v2026.8.19-lukk
 ```
 
 ```bash
-docker compose up -d --force-recreate gateway
+docker tag lukk17/hermes-agent-gateway:v2026.8.19-lukk lukk17/hermes-agent-gateway:latest
 ```
 
-Revert the `image:` line once the newer build is fixed.
+```bash
+docker push lukk17/hermes-agent-gateway:latest
+```
+
+Repeat the same three commands for `lukk17/hermes-agent-dashboard` if the
+dashboard image also needs rolling back. Then on the minipc:
+
+```bash
+docker compose pull gateway dashboard
+```
+
+```bash
+docker compose up -d --force-recreate gateway dashboard
+```
+
+Push the fixed build's `:latest` once it is ready, the same way step 6 does,
+and the minipc picks it up on its next `docker compose pull`.
 
 ## Conflict resolution cheatsheet
 
@@ -393,10 +496,16 @@ A reference listing, not a paste-in-one-go block. Each line has its own copyable
 git fetch upstream --tags
 git tag -l "v20*" --sort=-v:refname
 
-# rebase
-git checkout master
-git rebase v<TAG>
+# back up, then rebase in a worktree
+git branch backup/master-pre-v<TAG> master
+git worktree add ../hermes-agent-rebase -b rebase/v<TAG> master
+cd ../hermes-agent-rebase
+git rebase --committer-date-is-author-date v<TAG>
 # resolve conflicts, git add ..., git rebase --continue
+cd ../hermes-agent
+git merge --ff-only rebase/v<TAG>
+git worktree remove ../hermes-agent-rebase
+git branch -d rebase/v<TAG>
 
 # build + tag + push
 docker compose --profile build build upstream-base
@@ -410,9 +519,9 @@ docker push lukk17/hermes-agent-gateway:latest
 docker push lukk17/hermes-agent-dashboard:v<TAG>-lukk
 docker push lukk17/hermes-agent-dashboard:latest
 
-# consume on minipc
+# consume on minipc, no compose change, docker-compose.minipc.yml stays on :latest
 ssh user@minipc
-cd /opt/hermes-fork
+cd /opt/docker-stack/hermes
 export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
 git pull
 docker compose pull
