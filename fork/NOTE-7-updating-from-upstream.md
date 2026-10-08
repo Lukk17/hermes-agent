@@ -247,6 +247,8 @@ The revision is the bare tag `v2026.8.27`, not `upstream/v2026.8.27`. Tags are n
 
 ### 5. Build the images
 
+These run on this dev box, from the repo root, where the `.env` has no `COMPOSE_FILE` line and Compose merges `docker-compose.override.yml` with its `build:` blocks automatically. They never run on the minipc, which only pulls (step 7).
+
 ```bash
 docker compose --profile build build upstream-base
 ```
@@ -334,10 +336,6 @@ cd /opt/docker-stack/hermes
 ```
 
 ```bash
-export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
-```
-
-```bash
 git pull
 ```
 
@@ -357,8 +355,7 @@ docker compose exec gateway hermes doctor
 docker compose exec gateway hermes cron list
 ```
 
-The `COMPOSE_FILE` pair matters: `docker-compose.minipc.yml` is what replaces the
-`build:` blocks with registry images. See `fork/NOTE-6-minipc-proxmox.md`.
+Every `docker compose` command above takes `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, added once at bootstrap, and they must run from `/opt/docker-stack/hermes` where Compose finds that file. The pair matters: `docker-compose.minipc.yml` is what replaces the `build:` blocks with registry images, and without it Compose would merge `docker-compose.override.yml` and try to build. How to add the line, and the explicit `-f` form if it is missing, is in "Every docker compose command on the minipc uses both files" in `fork/NOTE-6-minipc-proxmox.md`.
 
 If anything fails after the upgrade, roll back by moving `:latest` itself back
 to the previous good build, on the dev box, not by editing
@@ -378,7 +375,7 @@ docker push lukk17/hermes-agent-gateway:latest
 ```
 
 Repeat the same three commands for `lukk17/hermes-agent-dashboard` if the
-dashboard image also needs rolling back. Then on the minipc:
+dashboard image also needs rolling back. Then on the minipc, from `/opt/docker-stack/hermes`, with the same `COMPOSE_FILE` line in effect:
 
 ```bash
 docker compose pull gateway dashboard
@@ -507,7 +504,7 @@ git merge --ff-only rebase/v<TAG>
 git worktree remove ../hermes-agent-rebase
 git branch -d rebase/v<TAG>
 
-# build + tag + push
+# build + tag + push, on the dev box (override merged automatically, no COMPOSE_FILE)
 docker compose --profile build build upstream-base
 docker compose build gateway dashboard
 docker tag hermes-agent:fork           lukk17/hermes-agent-gateway:v<TAG>-lukk
@@ -520,9 +517,9 @@ docker push lukk17/hermes-agent-dashboard:v<TAG>-lukk
 docker push lukk17/hermes-agent-dashboard:latest
 
 # consume on minipc, no compose change, docker-compose.minipc.yml stays on :latest
+# the compose pair comes from the COMPOSE_FILE line in the minipc .env (fork/NOTE-6-minipc-proxmox.md)
 ssh user@minipc
 cd /opt/docker-stack/hermes
-export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
 git pull
 docker compose pull
 docker compose up -d --force-recreate gateway dashboard

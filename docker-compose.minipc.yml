@@ -8,8 +8,10 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.minipc.yml up -d
 #
-# or export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml once
-# per shell. See fork/NOTE-6-minipc-proxmox.md.
+# or, as documented, put COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+# in the minipc's repo-root .env so plain `docker compose` picks the pair up.
+# See "Every docker compose command on the minipc uses both files" in
+# fork/NOTE-6-minipc-proxmox.md.
 #
 # Both images are pinned to :latest on purpose: the user keeps :latest always
 # pointing at a working build, so this file never needs an edit on a version

@@ -14,7 +14,7 @@ Everything hermes owns lives in one directory on your machine, `hermes-data/`, w
 
 `hermes-data/` is its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. This repo's own `.gitignore` ignores it wholesale with one line, `/hermes-data/`, so this repo never tracks a single byte of it. Inside that nested repository, `hermes-data/.gitignore` decides which of those files travel between machines the same way this repo's `.gitignore` used to: it ignores everything by default and then re-includes exactly the pieces worth carrying, `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, the top-level entry scripts `scripts/*.sh`, the runtime `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/` and `local/` folders, the `.env.example` template for `hermes-data/.env`, and `.gitignore` itself. Databases, logs, caches, OAuth tokens and `hermes-data/.env` stay on the machine that made them.
 
-That is what makes the intended workflow work. Use hermes on one machine, let it update its own SOUL and memories as it goes, then inside `hermes-data/`, `git commit` and `git push` to `hermes-projects`. On the other machine, `git pull` inside `hermes-data/` and `docker compose up -d` from the repo root, and the same persona, memories, cron jobs and projects are there with no setup step.
+That is what makes the intended workflow work. Use hermes on one machine, let it update its own SOUL and memories as it goes, then inside `hermes-data/`, `git commit` and `git push` to `hermes-projects`. On the other machine, `git pull` inside `hermes-data/` and `docker compose up -d` from the repo root, and the same persona, memories, cron jobs and projects are there with no setup step. On the minipc that `docker compose` runs on `docker-compose.yml` plus `docker-compose.minipc.yml`, selected by the `COMPOSE_FILE` line in its `.env`, never on the override (see `fork/NOTE-6-minipc-proxmox.md`).
 
 One exception to hermes writing whatever it likes: `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh` are re-mounted read-only on top of the read-write parent. Hermes cannot rewrite them at runtime. To change either one, edit the file on the host and recreate the container.
 
@@ -96,6 +96,8 @@ Full guide with screenshots and failure-mode table: see `fork/NOTE-3-discord.md`
 
 ## Bringing it up
 
+This sequence is for a dev box that builds the images locally, with no `COMPOSE_FILE` line in its `.env`, so Compose merges `docker-compose.override.yml` automatically. The minipc never builds and never uses the override: it pulls prebuilt images through `docker-compose.minipc.yml`, see `fork/NOTE-6-minipc-proxmox.md`.
+
 ```bash
 docker compose config
 ```
@@ -126,7 +128,7 @@ docker compose exec gateway ls /opt/data/projects
 
 `upstream-base` builds the untouched upstream `Dockerfile` into `hermes-agent:upstream`, the base both fork images sit on. It is a build-only service and never runs.
 
-The dashboard listens on `127.0.0.1:9119` of the host by default. For remote access use SSH tunnel (`ssh -L 9119:localhost:9119 <host>`) or nginx with basic auth (see `fork/NOTE-6-minipc-proxmox.md`).
+The dashboard listens on `127.0.0.1:9119` of the host by default. For remote access use an SSH tunnel (`ssh -L 9119:localhost:9119 <host>`), the only access path `fork/NOTE-6-minipc-proxmox.md` documents.
 
 ## After editing fork files
 
@@ -141,6 +143,8 @@ The recreate command, run from the repo root:
 ```bash
 docker compose up -d --force-recreate gateway dashboard
 ```
+
+On the minipc the same command works from `/opt/docker-stack/hermes`, where the `COMPOSE_FILE` line in its `.env` selects `docker-compose.yml` plus `docker-compose.minipc.yml`. There, a `Dockerfile.fork` change means a new image built and pushed from the dev box, then `docker compose pull` on the minipc, never a local build.
 
 A coding agent does NOT recreate the container itself. It says which file to change and whether a recreate is needed, then waits. See `fork/AGENTS.md` for the full editing protocol.
 
@@ -207,7 +211,7 @@ git fetch origin
 git checkout -f -b master origin/master
 ```
 
-On a machine that already has both clones, pull both and bring it up:
+On a machine that already has both clones, pull both and bring it up. On the minipc, run these from `/opt/docker-stack/hermes`, so the final `docker compose up -d` takes `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in its `.env` (see `fork/NOTE-6-minipc-proxmox.md`):
 
 ```bash
 git pull

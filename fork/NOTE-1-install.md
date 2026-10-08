@@ -32,6 +32,8 @@ Authentication: the dashboard has no built-in auth. Access is restricted at the 
 
 This note covers a clean install from zero to working. For day-to-day operations see fork/NOTE-5-operations.md.
 
+It is written for a dev box that builds the images locally. Every `docker compose` command here relies on Compose merging `docker-compose.override.yml` automatically, so this machine's `.env` must not carry a `COMPOSE_FILE` line. A minipc that pulls prebuilt images never uses the override and follows fork/NOTE-6-minipc-proxmox.md instead.
+
 ### Prerequisites
 
 - Docker Desktop (Windows/Mac) or Docker Engine + Compose plugin v2.24+ (Linux)
@@ -171,6 +173,8 @@ docker compose exec -u hermes gateway bash -lc "cd /opt/data/projects/osint && u
 
 The chain inside the quotes runs in the container's bash, not in your shell, so both blocks paste unchanged into PowerShell.
 
+On the minipc, run the same two commands from `/opt/docker-stack/hermes`. They pick up `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, see "Every docker compose command on the minipc uses both files" in fork/NOTE-6-minipc-proxmox.md.
+
 Build them as the `hermes` user, not root, or the venvs land root-owned and the
 supervised gateway cannot use them.
 
@@ -255,4 +259,4 @@ Ignored by the fork repository's own `.gitignore`:
 
 ### Deploying to a minipc (Proxmox VM with Docker Engine)
 
-See `fork/NOTE-6-minipc-proxmox.md` for the minipc-specific deltas: which files to copy, how to pull the prebuilt image from Docker Hub, how to keep `.agents/skills/` in sync from `agent-standards`, and the optional nginx reverse-proxy setup if you want LAN browser access without an SSH tunnel.
+See `fork/NOTE-6-minipc-proxmox.md` for the minipc-specific deltas: which files to copy, how to pull the prebuilt image from Docker Hub, how to keep `.agents/skills/` in sync from `agent-standards`, and how to open the dashboard through an SSH tunnel, the only remote access path.

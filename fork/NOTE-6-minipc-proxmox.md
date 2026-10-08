@@ -59,7 +59,7 @@ Plus, tracked in the fork repository's own root:
 - `.agents/skills/`: curated skills, mounted read-only at `/opt/data/external-skills/`.
 - `./skills/`: bundled hermes skills, mounted read-only at `/opt/data/bundled-skills/`.
 - `docker-compose.override.yml`, `Dockerfile.fork`: container wiring.
-- `.env` (gitignored): compose-time values, including `HERMES_UID`/`HERMES_GID`.
+- `.env` (gitignored): compose-time values, including `HERMES_UID`/`HERMES_GID`, and on the minipc the `COMPOSE_FILE` line that selects `docker-compose.minipc.yml`.
 
 The fork is a real rebase target: `git fetch upstream && git rebase v<TAG>`
 on `master` does not conflict with any of the above because upstream does
@@ -100,7 +100,7 @@ git commit -m "state: soul, memories, cron"
 git push
 ```
 
-On the minipc:
+On the minipc. The `docker compose up -d` at the end runs from `/opt/docker-stack/hermes` and takes `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, see "Every docker compose command on the minipc uses both files" below:
 
 ```bash
 cd /opt/docker-stack/hermes/hermes-data
@@ -157,7 +157,7 @@ needs:
 |---|---|---|
 | `/opt/docker-stack/hermes/` (the project root) | `git clone` of `hermes-agent` | the fork's own tracked content: `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml`, `docker-compose.minipc.yml`, `Dockerfile.fork` |
 | `/opt/docker-stack/hermes/hermes-data/` | `git clone` of the private `hermes-projects`, into the `hermes-data` subdirectory, before the first container start | `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/`, `projects/`, `scripts/`, `skills/`, `plugins/`, `hooks/`, `skins/`, `plans/`, `workspace/`, `local/`, `.env.example` |
-| `/opt/docker-stack/hermes/.env` | hand-written, from `.env.fork.example` | compose-time values and the container uid, gitignored |
+| `/opt/docker-stack/hermes/.env` | hand-written, from `.env.fork.example` | compose-time values, the container uid and the `COMPOSE_FILE` line, gitignored |
 | `/opt/docker-stack/hermes/hermes-data/.env` | hand-written, from `hermes-data/.env.example` | runtime secrets hermes child processes read, gitignored |
 
 That is it. No rsync, no source tree, no `.venv`, no `node_modules`.
@@ -227,6 +227,31 @@ secret values:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.minipc.yml config --quiet
 ```
+
+### Every docker compose command on the minipc uses both files
+
+On the minipc the stack always runs as `docker-compose.yml` plus `docker-compose.minipc.yml`, never with `docker-compose.override.yml`. Plain `docker compose` with no `-f` and no `COMPOSE_FILE` would merge the override automatically and try to build images the minipc cannot build, so every compose command there has to name the pair one way or another.
+
+The permanent way is one line in the minipc's repo-root `.env`. Compose v2 reads the `.env` file in the project directory not only for `${VAR}` substitution but also for its own pre-defined settings, `COMPOSE_FILE` among them. With that line in place, a plain `docker compose ...` run from `/opt/docker-stack/hermes` uses the pair in every shell, every SSH session and every one-shot `ssh minipc '...'` command, with nothing to export. Bootstrap step 6 below adds it. Run once, from `/opt/docker-stack/hermes`:
+
+```bash
+printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml\n' >> .env
+```
+
+Check that Compose picked it up. The output must list `lukk17/hermes-agent-gateway:latest` and `lukk17/hermes-agent-dashboard:latest`, and not the locally built `hermes-agent:fork` or `hermes-agent:fork-dashboard`:
+
+```bash
+docker compose config --images
+```
+
+Rules that keep this reliable:
+
+- Run every minipc compose command from `/opt/docker-stack/hermes`. Compose looks for `.env` in the current directory, so from anywhere else the line is not read.
+- A `COMPOSE_FILE` exported in the shell wins over the `.env` line. Do not export one on the minipc.
+- A line in `~/.bashrc` is the weaker choice: it reaches interactive bash sessions only, not one-shot SSH commands or cron, and it would also apply to every other Compose project that user runs.
+- Without the `.env` line, name the pair on each command instead, for example `docker compose -f docker-compose.yml -f docker-compose.minipc.yml up -d`. Explicit `-f` flags always override `COMPOSE_FILE`.
+
+The dev box never gets this line. Its `.env` has no `COMPOSE_FILE`, so Compose there uses `docker-compose.yml` plus the automatically merged `docker-compose.override.yml`, which builds the images locally. The commands in `fork/NOTE-1-install.md`, `fork/NOTE-5-operations.md` and the build steps of `fork/NOTE-7-updating-from-upstream.md` rely on that.
 
 ### Bootstrap on a fresh minipc
 
@@ -330,12 +355,19 @@ Every block below runs on the minipc over SSH, so each one is Linux-only.
    printf 'HERMES_UID=%s\nHERMES_GID=%s\n' "$(id -u)" "$(id -g)" >> .env
    ```
 
-6. Export the `COMPOSE_FILE` pair once per shell so every later `docker
-   compose` command on the minipc picks up both files without repeating `-f`:
+6. Make every later `docker compose` command on the minipc use `docker-compose.yml` plus `docker-compose.minipc.yml`, permanently, by adding the `COMPOSE_FILE` line to the same `.env`. Why this and not an `export`, see "Every docker compose command on the minipc uses both files" above:
 
    ```bash
-   export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
+   printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml\n' >> .env
    ```
+
+   Confirm it took effect. The output must list the two `lukk17/` images and not the locally built `hermes-agent:fork` or `hermes-agent:fork-dashboard`:
+
+   ```bash
+   docker compose config --images
+   ```
+
+   Every block from here to the end of this sequence runs from `/opt/docker-stack/hermes`, where Compose finds that `.env`.
 
 7. Pull the prebuilt images:
 
@@ -456,6 +488,8 @@ After either operation, no container restart is needed. Hermes rescans
 docker compose exec gateway hermes skills reload
 ```
 
+Run it from the repo root. On the dev box that is all it needs. On the minipc, run it from `/opt/docker-stack/hermes` after a `git pull` of the fork has brought the new skills across, and the `COMPOSE_FILE` line in the minipc's `.env` supplies the compose pair.
+
 ### Fork plugin (optional, future use)
 
 Hermes looks for plugins in its home directory, which is `hermes-data/` on the
@@ -499,6 +533,8 @@ shim:
 ```bash
 docker compose exec -u hermes gateway uv pip install --target /opt/data/lazy-packages <pkg>
 ```
+
+On the minipc, run it from `/opt/docker-stack/hermes` so the `COMPOSE_FILE` line in its `.env` applies.
 
 One caveat: hermes' own install path additionally passes `--constraint` from
 `_core_constraints_file()` (`tools/lazy_deps.py:727-736`), pinning shared
@@ -554,14 +590,10 @@ the alternative.
 
 ### Updating to a new upstream image
 
-After you push a new build to Docker Hub from the dev box:
+After you push a new build to Docker Hub from the dev box, on the minipc. Both compose commands take `docker-compose.yml` plus `docker-compose.minipc.yml` from the `COMPOSE_FILE` line in the minipc's `.env`, see "Every docker compose command on the minipc uses both files" above:
 
 ```bash
 cd /opt/docker-stack/hermes
-```
-
-```bash
-export COMPOSE_FILE=docker-compose.yml:docker-compose.minipc.yml
 ```
 
 ```bash
