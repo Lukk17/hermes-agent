@@ -308,22 +308,4 @@ native/fts5_cjk/*.so
 # Fork-specific (Lukk17 fork)
 .idea/
 .kilo/jetbrains.json
-# hermes-data/ is the single bind-mounted HERMES_HOME (/opt/data). It holds
-# runtime state (state.db, logs/, sessions/, cache/, ...) that must never be
-# committed, plus the handful of files the fork DOES track. Default-deny at
-# every level: git will not re-include a file whose parent directory is
-# excluded, so each tracked directory is re-opened explicitly before its
-# contents are filtered.
-/hermes-data/*
-!/hermes-data/config.yaml
-!/hermes-data/SOUL.md
-!/hermes-data/cron
-/hermes-data/cron/*
-!/hermes-data/cron/jobs.json
-!/hermes-data/memories
-/hermes-data/memories/*
-!/hermes-data/memories/*.md
-!/hermes-data/projects
-!/hermes-data/scripts
-/hermes-data/scripts/*
-!/hermes-data/scripts/crypto-monitor-daily.sh
+/hermes-data/

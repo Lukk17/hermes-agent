@@ -19,16 +19,20 @@ Most of the rest of this note runs ON the minipc, in an SSH session, on Debian. 
 
 ### Repo-as-deployable-unit
 
-The intent of this fork is that the GitHub repo IS the deployable unit: a
-fresh `git clone` on the minipc gives you everything except secrets and
-runtime state.
+The intent of this fork is that the GitHub repo IS the deployable unit: two
+fresh `git clone`s on the minipc, the fork repository and its nested
+`hermes-data/` repository, give you everything except secrets and runtime
+state.
 
-One host directory carries it. `./hermes-data/` is bind-mounted at `/opt/data`
-inside the container, which is hermes' home directory, so everything hermes
-writes about itself lands back there on the host. `.gitignore` then splits that
-one directory in two.
+One host directory carries hermes' own half of it. `./hermes-data/` is
+bind-mounted at `/opt/data` inside the container, which is hermes' home
+directory, so everything hermes writes about itself lands back there on the
+host. It is its own git repository, a clone of the private
+`Lukk17/hermes-projects` (branch `master`), not a submodule. Its own
+`hermes-data/.gitignore` then splits that one directory in two.
 
-Tracked, and therefore in the clone on the minipc:
+Tracked by `hermes-data/.gitignore`, and therefore in the `hermes-projects`
+clone on the minipc:
 
 - `./hermes-data/config.yaml`: model, provider, skills paths, Discord channel prompts.
 - `./hermes-data/SOUL.md`: the persona.
@@ -36,15 +40,18 @@ Tracked, and therefore in the clone on the minipc:
 - `./hermes-data/memories/MEMORY.md` and `USER.md`: what hermes has learned.
 - `./hermes-data/projects/`: the project workspaces.
 - `./hermes-data/scripts/crypto-monitor-daily.sh`: the cron entry point.
+- `./hermes-data/skills/`: skills hermes installed or wrote at runtime, with `.usage.json` and `.bundled_manifest`.
+- `./hermes-data/plugins/`, `hooks/`, `skins/`: plugins, hooks and skins added at runtime.
 
-Ignored, and therefore per-machine:
+Ignored by `hermes-data/.gitignore`, and therefore per-machine:
 
 - `./hermes-data/state.db`, `sessions/`, `logs/`, `cache/`, `kanban.db`: sessions, logs, caches.
 - `./hermes-data/auth.json`: OAuth tokens. Log in again on the minipc.
 - `./hermes-data/.env`: runtime secrets hermes and its child processes read.
 - `./hermes-data/projects/*/.venv/`: per-project virtualenvs, rebuilt in the container.
+- `./hermes-data/skills/.curator_backups/`, `skills/.usage.json.lock`, `skills/.hub/audit.log`: curator snapshots, a lock file and a log.
 
-Plus, tracked in the repo root:
+Plus, tracked in the fork repository's own root:
 
 - `.agents/skills/`: curated skills, mounted read-only at `/opt/data/external-skills/`.
 - `./skills/`: bundled hermes skills, mounted read-only at `/opt/data/bundled-skills/`.
@@ -53,25 +60,33 @@ Plus, tracked in the repo root:
 
 The fork is a real rebase target: `git fetch upstream && git rebase v<TAG>`
 on `master` does not conflict with any of the above because upstream does
-not ship `fork/`, `hermes-data/`, `.agents/skills/`, or `./skills/`.
+not ship `fork/`, `hermes-data/`, `.agents/skills/`, or `./skills/`, and
+because `hermes-data/` is now a separate git repository that a rebase of the
+fork never touches at all.
 
 See `fork/NOTE-7-updating-from-upstream.md` for the rebase procedure.
 
 ### What "pull on the other machine and it is all there" actually means
 
-The dev box and the minipc are two clones of the same repo. On the dev box,
-after a session where hermes updated its SOUL, wrote a memory, or added a cron
-job, those edits are sitting in your working tree as ordinary modified files,
-because the container wrote them straight through the bind mount:
+The dev box and the minipc each hold two clones: the fork repository, and
+`hermes-data/` as its own clone of the private `hermes-projects`. On the dev
+box, after a session where hermes updated its SOUL, wrote a memory, or added a
+cron job, those edits are sitting in the `hermes-data/` working tree as
+ordinary modified files, because the container wrote them straight through
+the bind mount:
 
 ```bash
-git status hermes-data
+cd hermes-data
 ```
 
-Commit and push them like any other change:
+```bash
+git status
+```
+
+Commit and push them like any other change, still from inside `hermes-data/`:
 
 ```bash
-git add hermes-data
+git add -A
 ```
 
 ```bash
@@ -85,11 +100,15 @@ git push
 On the minipc:
 
 ```bash
-cd /opt/hermes-fork
+cd /opt/hermes-fork/hermes-data
 ```
 
 ```bash
 git pull
+```
+
+```bash
+cd ..
 ```
 
 ```bash
@@ -129,12 +148,13 @@ Expect something like `192.168.1.42/24` on the same subnet as your laptop. This 
 ### Files to copy to the minipc
 
 Because the repo is deployable as-is, the rsync step in earlier revisions is
-replaced by a `git clone` (or `git pull` if already cloned). The minipc
+replaced by two `git clone`s (or `git pull`s if already cloned). The minipc
 needs:
 
 | Path on minipc | Source | Notes |
 |---|---|---|
-| `/opt/hermes-fork/` (the project root) | `git clone` of this repo | tracked content, including `hermes-data/config.yaml`, `hermes-data/SOUL.md`, `hermes-data/cron/jobs.json`, `hermes-data/memories/`, `hermes-data/projects/`, `hermes-data/scripts/`, `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml` |
+| `/opt/hermes-fork/` (the project root) | `git clone` of `hermes-agent` | the fork's own tracked content: `.agents/skills/`, `fork/`, `docker-compose.yml`, `docker-compose.override.yml`, `Dockerfile.fork` |
+| `/opt/hermes-fork/hermes-data/` | `git clone` of the private `hermes-projects`, into the `hermes-data` subdirectory, before the first container start | `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/`, `projects/`, `scripts/`, `skills/`, `plugins/`, `hooks/`, `skins/` |
 | `/opt/hermes-fork/.env` | hand-written, from `.env.fork.example` | compose-time values and the container uid, gitignored |
 | `/opt/hermes-fork/hermes-data/.env` | hand-written | runtime secrets hermes child processes read, gitignored |
 
@@ -165,6 +185,22 @@ cd /opt/hermes-fork
 
 ```bash
 git clone https://github.com/Lukk17/hermes-agent.git .
+```
+
+`hermes-data/` is its own git repository, a clone of the private
+`Lukk17/hermes-projects` (branch `master`), not a submodule. Clone it next,
+before the first container start: `docker compose up` creates `hermes-data/`
+itself if it does not exist, and `git clone` refuses to clone into a
+directory that already has files in it. `hermes-projects` is private, so
+authenticate to GitHub on this machine first, either `gh auth login` or a
+credential helper backed by a personal access token:
+
+```bash
+gh auth login
+```
+
+```bash
+git clone https://github.com/Lukk17/hermes-projects.git hermes-data
 ```
 
 ```bash
@@ -393,11 +429,11 @@ One caveat: hermes' own install path additionally passes `--constraint` from
 transitive dependencies to the core venv's versions. A hand-run install skips
 that and can pull an incompatible transitive dependency.
 
-`hermes-data/plugins/` is not in the `.gitignore` re-include list, so a plugin
-created there is per-machine and has to be recreated on each box. To make one
-travel with the repo instead, add a matching `!` line for it in `.gitignore`
-next to the existing ones for `config.yaml`, `SOUL.md` and `projects/`. No new
-bind mount is needed: the directory is already inside the `/opt/data` mount.
+`hermes-data/plugins/` is in `hermes-data/.gitignore`'s re-include list, so
+a plugin created there is tracked and travels with the `hermes-projects` clone
+like `config.yaml`, `SOUL.md` and `projects/`. Commit it from inside
+`hermes-data/`. No new bind mount is needed: the directory is already inside
+the `/opt/data` mount.
 
 ### Bring it up
 
@@ -540,9 +576,10 @@ automation.
   during a `terminal` session. Give the VM 4GB minimum, 8GB comfortable.
 - **Backups.** Add `./hermes-fork/hermes-data/` to Proxmox's backup schedule
   (PBS or vzdump). One directory covers everything: the tracked half (config,
-  persona, cron, memories, projects) is also in git, and the untracked half
-  (`state.db` sessions, `auth.json` OAuth, `kanban.db` board state, `.env`)
-  exists nowhere else.
+  persona, cron, memories, projects) is also in `hermes-data`'s own git
+  repository (`hermes-projects`), and the untracked half (`state.db`
+  sessions, `auth.json` OAuth, `kanban.db` board state, `.env`) exists
+  nowhere else.
 - **Firewall.** If Proxmox enables a guest firewall by default, open port
   22 (for SSH) and 80 (for nginx) at the Proxmox firewall level. Port 9119
   stays loopback-only and never appears on the VM's interfaces.
@@ -571,40 +608,63 @@ Your `./hermes-data/` is bind-mounted, not copied into the image, so config
 and sessions survive. OAuth tokens refresh automatically on next session
 start.
 
-### hermes-data is selectively tracked, not wholly ignored
+### hermes-data is its own repository, selectively tracked by its own .gitignore
 
-`hermes-data/` is one directory holding two kinds of file. The root
-`.gitignore` ignores `hermes-data/*` and then re-includes the parts worth
+`hermes-data/` is a separate git repository, a clone of the private
+`Lukk17/hermes-projects` (branch `master`), not a submodule. The fork
+repository's own `.gitignore` ignores the whole directory with one line:
+
+```
+/hermes-data/
+```
+
+Inside `hermes-data/`, its own `.gitignore` is what holds two kinds of file
+apart. It ignores everything by default and then re-includes the parts worth
 carrying between machines:
 
 ```
-/hermes-data/*
-!/hermes-data/config.yaml
-!/hermes-data/SOUL.md
-!/hermes-data/cron
-/hermes-data/cron/*
-!/hermes-data/cron/jobs.json
-!/hermes-data/memories
-/hermes-data/memories/*
-!/hermes-data/memories/*.md
-!/hermes-data/projects
-!/hermes-data/scripts
-/hermes-data/scripts/*
-!/hermes-data/scripts/crypto-monitor-daily.sh
+/*
+!/.gitignore
+!/config.yaml
+!/SOUL.md
+!/cron
+/cron/*
+!/cron/jobs.json
+!/memories
+/memories/*
+!/memories/*.md
+!/projects
+!/scripts
+/scripts/*
+!/scripts/crypto-monitor-daily.sh
+!/skills
+!/plugins
+!/hooks
+!/skins
+/skills/.curator_backups/
+/skills/.usage.json.lock
+/skills/.hub/audit.log
+data/
 ```
 
 The re-include pairs look repetitive on purpose. Git will not look inside an
 ignored directory, so to reach one file in a subdirectory you have to
 un-ignore the directory, re-ignore its contents, then un-ignore the one file.
 
-To see which side of the line any file falls on, ask git rather than reading
-the pattern list:
+To see which side of the line any file inside `hermes-data/` falls on, ask
+git rather than reading the pattern list, from inside `hermes-data/` so the
+check runs against its own repository:
 
 ```bash
-git check-ignore -v hermes-data/<path>
+cd hermes-data
 ```
 
-No output means the file is tracked and travels with the repo.
+```bash
+git check-ignore -v <path>
+```
+
+No output means the file is tracked and travels with the `hermes-projects`
+clone.
 
 ### Per-project subdirectories (crypto-monitor, osint)
 
@@ -637,6 +697,7 @@ Hermes profiles (`hermes -p crypto`, `hermes -p osint`) running as
 separate containers with separate Discord bot users.
 
 `hermes-data/projects/<name>/` is the canonical spot for project workspaces
-because it is tracked in git, so the sources travel to the other machine with
-the clone. Each project's `.venv/` does not, and has to be built inside the
-container once per machine (see `fork/NOTE-1-install.md`, step 6b).
+because it is tracked in `hermes-data`'s own git repository, so the sources
+travel to the other machine with the `hermes-projects` clone. Each project's
+`.venv/` does not, and has to be built inside the container once per machine
+(see `fork/NOTE-1-install.md`, step 6b).

@@ -12,9 +12,9 @@ Docker and git commands are identical in PowerShell and in a Unix shell, so they
 
 Everything hermes owns lives in one directory on your machine, `hermes-data/`, which is bind-mounted into the container as `/opt/data`. That is the container's home directory, so every file hermes creates, its persona, its memories, its sessions, its logs, its project workspaces, lands back in `hermes-data/` on the host. There is no Docker volume, and nothing is hidden inside the image.
 
-Git decides which of those files travel between machines. `.gitignore` ignores `hermes-data/*` and then re-includes exactly the pieces worth carrying: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, and `scripts/crypto-monitor-daily.sh`. Databases, logs, caches, OAuth tokens and `hermes-data/.env` stay on the machine that made them.
+`hermes-data/` is its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. This repo's own `.gitignore` ignores it wholesale with one line, `/hermes-data/`, so this repo never tracks a single byte of it. Inside that nested repository, `hermes-data/.gitignore` decides which of those files travel between machines the same way this repo's `.gitignore` used to: it ignores everything by default and then re-includes exactly the pieces worth carrying, `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, `scripts/crypto-monitor-daily.sh`, the runtime `skills/`, `plugins/`, `hooks/` and `skins/` folders, and `.gitignore` itself. Databases, logs, caches, OAuth tokens and `hermes-data/.env` stay on the machine that made them.
 
-That is what makes the intended workflow work. Use hermes on one machine, let it update its own SOUL and memories as it goes, `git commit` and `git push`. On the other machine, `git pull` and `docker compose up -d`, and the same persona, memories, cron jobs and projects are there with no setup step.
+That is what makes the intended workflow work. Use hermes on one machine, let it update its own SOUL and memories as it goes, then inside `hermes-data/`, `git commit` and `git push` to `hermes-projects`. On the other machine, `git pull` inside `hermes-data/` and `docker compose up -d` from the repo root, and the same persona, memories, cron jobs and projects are there with no setup step.
 
 One exception to hermes writing whatever it likes: `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh` are re-mounted read-only on top of the read-write parent. Hermes cannot rewrite them at runtime. To change either one, edit the file on the host and recreate the container.
 
@@ -27,14 +27,15 @@ Whenever a path appears below, `hermes-data/...` and anything else without a lea
 | `docker-compose.override.yml` | Auto-merged on top of upstream `docker-compose.yml`. Points `/opt/data` at `./hermes-data` instead of upstream's `~/.hermes`; re-mounts `./hermes-data/config.yaml` and `./hermes-data/scripts/crypto-monitor-daily.sh` read-only on top of it; adds `.agents/skills:/opt/data/external-skills:ro` and `./skills:/opt/data/bundled-skills:ro` for skill discovery; sets `HERMES_SKIP_CONFIG_MIGRATION=1` so the boot hook does not try to rewrite the read-only config; env passthrough for on-chain and OSINT keys; the dashboard loopback bind on `127.0.0.1:9119`; the `Dockerfile.fork` build for both services with `BASE_IMAGE=hermes-agent:upstream`; and the build-only `upstream-base` service that produces that base image. |
 | `Dockerfile.fork` | The fork's tools image, built on `BASE_IMAGE` (default `hermes-agent:upstream`, produced from the untouched upstream `Dockerfile`). Adds OSINT apt dependencies, pyenv with Python 3.11 (crypto-monitor) and 3.12 (osint), `chown -R hermes:hermes /opt/hermes/ui-tui` so the runtime user can rewrite the dashboard's UI dist, and a `/opt/data/.local/bin/hermes` symlink so `hermes doctor` passes. Used by BOTH the gateway and the dashboard service. |
 | `.env` (gitignored) | Local-only secrets and tokens. Auto-loaded by Docker Compose for variable substitution in `docker-compose.override.yml`. |
-| `hermes-data/` | The whole of hermes' home directory, mounted at `/opt/data` in the container. Holds tracked config and untracked runtime state side by side. Upstream does not ship this directory, so a rebase never conflicts with it. |
-| `hermes-data/config.yaml` (tracked) | Runtime config: model, provider, `skills.external_dirs`, Discord channel prompts. Re-mounted READ-ONLY in the container, so hermes cannot rewrite it. Edit on the host, recreate to apply. |
-| `hermes-data/SOUL.md` (tracked) | Agent persona. Writable at runtime, so hermes can update its own SOUL and the change lands on the host ready to commit. |
-| `hermes-data/cron/jobs.json` (tracked) | Scheduled jobs. Writable at runtime; `hermes cron` edits it in place. |
-| `hermes-data/memories/*.md` (tracked) | `MEMORY.md` and `USER.md`, the memory subsystem's own files. Writable at runtime, tracked so memories follow you to the other machine. |
-| `hermes-data/projects/` (tracked) | Project workspaces, one subdirectory per Discord channel. Reachable at `/opt/data/projects/` in the container. Each subdir has its own `.venv/` (with leading dot, gitignored, built once per machine), `AGENTS.md`, source code. Currently: `crypto-monitor/`, `osint/`, `research/`. |
-| `hermes-data/scripts/crypto-monitor-daily.sh` (tracked) | The cron job's entry point. Re-mounted READ-ONLY, same recreate-to-change rule as `config.yaml`. |
-| everything else in `hermes-data/` (ignored) | `state.db` (SQLite sessions), `auth.json` (OAuth tokens), `.env` (secrets hermes child processes read), `logs/`, `sessions/`, `cache/`, lock files. Per-machine, never committed. |
+| `hermes-data/` | The whole of hermes' home directory, mounted at `/opt/data` in the container. Its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Holds tracked config and untracked runtime state side by side. This repo's own `.gitignore` ignores it wholesale with one line, so a rebase of this repo never touches it at all. |
+| `hermes-data/config.yaml` (tracked in `hermes-projects`) | Runtime config: model, provider, `skills.external_dirs`, Discord channel prompts. Re-mounted READ-ONLY in the container, so hermes cannot rewrite it. Edit on the host, recreate to apply. |
+| `hermes-data/SOUL.md` (tracked in `hermes-projects`) | Agent persona. Writable at runtime, so hermes can update its own SOUL and the change lands on the host ready to commit inside `hermes-data/`. |
+| `hermes-data/cron/jobs.json` (tracked in `hermes-projects`) | Scheduled jobs. Writable at runtime; `hermes cron` edits it in place. |
+| `hermes-data/memories/*.md` (tracked in `hermes-projects`) | `MEMORY.md` and `USER.md`, the memory subsystem's own files. Writable at runtime, tracked so memories follow you to the other machine. |
+| `hermes-data/projects/` (tracked in `hermes-projects`) | Project workspaces, one subdirectory per Discord channel. Reachable at `/opt/data/projects/` in the container. Each subdir has its own `.venv/` (with leading dot, gitignored, built once per machine), `AGENTS.md`, source code. Currently: `crypto-monitor/`, `osint/`, `research/`. |
+| `hermes-data/scripts/crypto-monitor-daily.sh` (tracked in `hermes-projects`) | The cron job's entry point. Re-mounted READ-ONLY, same recreate-to-change rule as `config.yaml`. |
+| `hermes-data/skills/`, `plugins/`, `hooks/`, `skins/` (tracked in `hermes-projects`) | Skills, plugins, hooks and skins that hermes installs or writes at runtime, including the skill usage file `skills/.usage.json` and `skills/.bundled_manifest`. Tracked so they follow you to the other machine. Curator backup snapshots and lock files under `skills/` stay ignored. |
+| everything else in `hermes-data/` (ignored by `hermes-data/.gitignore`) | `state.db` (SQLite sessions), `auth.json` (OAuth tokens), `.env` (secrets hermes child processes read), `logs/`, `sessions/`, `cache/`, lock files. Per-machine, never committed. |
 | `.agents/skills/` | Curated fork-authored skill set, mirrored from `Lukk17/agent-standards/.agents/skills/`. Read-only mount at `/opt/data/external-skills/`. Listed in `hermes-data/config.yaml` under `skills.external_dirs`. |
 | `./skills/` | Bundled hermes skills, shipped by upstream. Read-only mount at `/opt/data/bundled-skills/`. Listed in `hermes-data/config.yaml` under `skills.external_dirs`. |
 | `fork/AGENTS.md` | Coding agent guide for the fork overlay (Kilo / Claude Code / OpenCode / Copilot / Cursor). Imported from `.claude/CLAUDE.md`. |
@@ -154,10 +155,14 @@ A coding agent does NOT recreate the container itself. It says which file to cha
 
 This is the workflow the layout exists for.
 
-On the machine you have been working on, commit whatever hermes changed about itself and push:
+On the machine you have been working on, commit whatever hermes changed about itself and push, from inside `hermes-data/`, which is its own git repository, a clone of the private `Lukk17/hermes-projects`:
 
 ```bash
-git add hermes-data
+cd hermes-data
+```
+
+```bash
+git add -A
 ```
 
 ```bash
@@ -168,16 +173,62 @@ git commit -m "state: soul, memories, cron, projects"
 git push
 ```
 
-On the other machine, pull and bring it up:
+```bash
+cd ..
+```
+
+Setting up a brand new machine needs two clones, in this order, from the directory that will hold the checkout. The second clone has to happen before the first container start, because `docker compose up` creates `hermes-data/` itself if it does not exist yet, and `git clone` refuses to clone into a directory that already has files in it:
+
+```bash
+git clone https://github.com/Lukk17/hermes-agent.git hermes-agent
+```
+
+```bash
+git clone https://github.com/Lukk17/hermes-projects.git hermes-agent/hermes-data
+```
+
+`hermes-projects` is private, so the second clone needs GitHub authentication on that machine first, either `gh auth login` or a credential helper backed by a personal access token.
+
+If `hermes-data/` already exists on a machine with runtime files in it, so the clone above would refuse, recover in place instead, from inside `hermes-data/`:
+
+```bash
+git init
+```
+
+```bash
+git remote add origin https://github.com/Lukk17/hermes-projects.git
+```
+
+```bash
+git fetch origin
+```
+
+```bash
+git checkout -f -b master origin/master
+```
+
+On a machine that already has both clones, pull both and bring it up:
 
 ```bash
 git pull
 ```
 
 ```bash
+cd hermes-data
+```
+
+```bash
+git pull
+```
+
+```bash
+cd ..
+```
+
+```bash
 docker compose up -d
 ```
 
-What does not travel, and has to exist on each machine separately: the repo-root `.env` and `hermes-data/.env` (secrets), `hermes-data/auth.json` (OAuth tokens, re-run the login), the per-project `.venv/` directories (rebuild them, see `fork/NOTE-1-install.md`), and the session databases and logs. Everything else, the persona, the memories, the cron schedule and the project workspaces, comes across in the clone.
+What does not travel, and has to exist on each machine separately: the repo-root `.env` and `hermes-data/.env` (secrets), `hermes-data/auth.json` (OAuth tokens, re-run the login), the per-project `.venv/` directories (rebuild them, see `fork/NOTE-1-install.md`), and the session databases and logs. Everything else, the persona, the memories, the cron schedule, the project workspaces and the runtime skills, plugins, hooks and skins, comes across in the `hermes-projects` clone.
 
 See `fork/NOTE-6-minipc-proxmox.md` for the Linux side of this, including the one command that makes the container's user id match the host file owner, and `fork/NOTE-7-updating-from-upstream.md` for the rebase procedure.

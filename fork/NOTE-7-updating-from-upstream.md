@@ -105,12 +105,11 @@ git rebase v2026.8.27
 `git rebase` walks every commit upstream made between your fork base and `v2026.8.27` and replays your fork commits on top. With this fork's history being a few small commits and `v2026.8.27` being thousands of upstream commits ahead, expect conflicts only on files the fork actually modifies. The full fork-owned set is:
 
 - `docker-compose.override.yml`, `Dockerfile.fork`
-- `.gitignore` (the fork appends the `hermes-data/` tracking rules to upstream's)
+- `.gitignore` (the fork appends one line ignoring `/hermes-data/` wholesale, on top of upstream's)
 - `FORK.md`, `fork/AGENTS.md`, `fork/NOTE-*.md`
 - `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`
-- `hermes-data/` (the tracked files inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, `scripts/crypto-monitor-daily.sh`)
 
-Only `.gitignore` is a file upstream also owns, so in practice it is the one that conflicts. Upstream ships neither `fork/` nor `hermes-data/`, so those replay cleanly however much has changed inside them, and files the fork never touches replay cleanly too.
+Only `.gitignore` is a file upstream also owns, so in practice it is the one that conflicts. Upstream ships neither `fork/` nor `hermes-data/`, so `fork/` replays cleanly however much has changed inside it, and files the fork never touches replay cleanly too. `hermes-data/` is its own git repository now, entirely ignored by this repo's `.gitignore`, so a rebase here never touches it at all.
 
 Two directories that used to be listed here are gone. `fork/hermes-config/` no longer exists: its three files moved into `hermes-data/` and are tracked there. `fork/projects/` no longer exists either, it moved to `hermes-data/projects/`. If a rebase surfaces either path, you are replaying a fork commit from before that move and should take the newer side.
 
@@ -159,7 +158,7 @@ git diff --stat v2026.8.27..master
 Then eyeball each diff to confirm the overrides and the notes still make sense against the new upstream base:
 
 ```bash
-git diff v2026.8.27..master -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/
+git diff v2026.8.27..master -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/
 ```
 
 The revision is the bare tag `v2026.8.27`, not `upstream/v2026.8.27`. Tags are not namespaced per remote the way branches are, so the `upstream/` form fails with an unknown-revision error.
@@ -312,7 +311,7 @@ Example: upstream `dashboard` service now becomes `dashboard` plus `dashboard-as
 
 Example: upstream removed `blockscout_query`, your crypto-monitor cron still calls it.
 
-- Reimplement the dropped tool as a plugin under `hermes-data/plugins/<name>/`, which the container already sees at `/opt/data/plugins/<name>/` because `hermes-data/` is mounted whole. That directory is gitignored by default, see `fork/NOTE-6-minipc-proxmox.md` for how to make a plugin travel with the repo
+- Reimplement the dropped tool as a plugin under `hermes-data/plugins/<name>/`, which the container already sees at `/opt/data/plugins/<name>/` because `hermes-data/` is mounted whole. That directory is re-included by `hermes-data`'s own `.gitignore`, so the plugin is tracked and travels with the `hermes-projects` clone. Commit it from inside `hermes-data/`
 - Keep the cron job pointing at the new tool name
 - Document the dependency in `fork/NOTE-<n>-<project>.md`
 
@@ -368,8 +367,10 @@ git checkout -b master
 Port the fork-specific files over from the old branch:
 
 ```bash
-git checkout <old-master> -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ hermes-data/ .agents/skills/
+git checkout <old-master> -- docker-compose.override.yml Dockerfile.fork .gitignore FORK.md fork/ .agents/skills/
 ```
+
+`hermes-data/` is not part of this checkout any more. It is its own git repository, a clone of the private `Lukk17/hermes-projects`, set up separately per `fork/NOTE-1-install.md`.
 
 ```bash
 git add -A

@@ -47,9 +47,37 @@ This note covers a clean install from zero to working. For day-to-day operations
 | `.env` (repo root, gitignored) | Compose-time values: the API keys the override forwards, and `HERMES_UID`/`HERMES_GID` on Linux. Auto-loaded by Compose for `${VAR}` substitution |
 | `.env.fork.example` | Committed template, copy to `.env` and fill |
 | `hermes-data/.env` (gitignored) | Runtime secrets that hermes and its child processes read directly. `DISCORD_BOT_TOKEN` and `MINIMAX_API_KEY` belong here rather than in the compose passthrough. See fork/NOTE-5-operations.md for why |
-| `hermes-data/` | Hermes' whole home directory, mounted at `/opt/data`. Tracked inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, `scripts/crypto-monitor-daily.sh`. Ignored inside it: `state.db`, `auth.json`, `.env`, `logs/`, `sessions/`, `cache/` and the rest of the runtime state. Upstream does not ship this directory, so a rebase never conflicts with it |
+| `hermes-data/` | Hermes' whole home directory, mounted at `/opt/data`. Its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Tracked inside that repository: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, `scripts/crypto-monitor-daily.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and its own `.gitignore`. Ignored inside it: `state.db`, `auth.json`, `.env`, `logs/`, `sessions/`, `cache/` and the rest of the runtime state. The fork repository ignores the whole directory with one line, `/hermes-data/`, so a rebase of the fork never touches it |
 | `.agents/skills/` | User-authored skill folders, read-only mount into the container as `/opt/data/external-skills`. Tracked in git, mirrors a curated subset of `Lukk17/agent-standards/.agents/skills/` |
 | `./skills/` | Bundled hermes skills, read-only mount into the container as `/opt/data/bundled-skills` |
+
+### Clone hermes-data before the first container start
+
+`hermes-data/` is its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. Clone it into place before you run `docker compose up` for the first time: the gateway container creates `hermes-data/` itself if it does not exist, and `git clone` refuses to clone into a directory that already has files in it. From the repo root:
+
+```bash
+git clone https://github.com/Lukk17/hermes-projects.git hermes-data
+```
+
+`hermes-projects` is private, so this clone needs GitHub authentication on this machine first, either `gh auth login` or a credential helper backed by a personal access token.
+
+If `hermes-data/` already exists on this machine with runtime files in it, so the clone above would refuse, recover in place instead, from inside `hermes-data/`:
+
+```bash
+git init
+```
+
+```bash
+git remote add origin https://github.com/Lukk17/hermes-projects.git
+```
+
+```bash
+git fetch origin
+```
+
+```bash
+git checkout -f -b master origin/master
+```
 
 ### Step 1, copy the env template
 
@@ -101,7 +129,7 @@ docker compose build gateway dashboard
 docker compose up -d
 ```
 
-`upstream-base` goes first because it builds the untouched upstream `Dockerfile` into the tag `hermes-agent:upstream`, which is the `BASE_IMAGE` both fork images sit on. It is a build-only service (`profiles: ["build"]`) and never runs. The gateway and dashboard builds are independent of each other. `./hermes-data/` already exists in a fresh clone with the tracked config, persona, cron jobs, memories and projects in it. The first start fills in the untracked runtime state beside them (`state.db`, `logs/`, `sessions/`, `cache/`).
+`upstream-base` goes first because it builds the untouched upstream `Dockerfile` into the tag `hermes-agent:upstream`, which is the `BASE_IMAGE` both fork images sit on. It is a build-only service (`profiles: ["build"]`) and never runs. The gateway and dashboard builds are independent of each other. `./hermes-data/` already has the tracked config, persona, cron jobs, memories and projects in it, from the `hermes-data` clone above. The first start fills in the untracked runtime state beside them (`state.db`, `logs/`, `sessions/`, `cache/`).
 
 Tail the gateway logs:
 
@@ -194,9 +222,9 @@ From another machine on your LAN or remote, SSH tunnel (see fork/NOTE-4-secure-r
 
 ### Where state lives
 
-Everything below is a path on your machine. The container sees all of `./hermes-data/` at `/opt/data`.
+Everything below is a path on your machine. The container sees all of `./hermes-data/` at `/opt/data`. Two separate git repositories cover this tree: the fork repository you cloned to get this file, and `hermes-data/`, which is its own clone of the private `Lukk17/hermes-projects`.
 
-Tracked, so it travels to another machine in the clone:
+Tracked inside `hermes-data/`'s own repository, so it travels to another machine in that clone:
 
 - `./hermes-data/config.yaml`: model, provider, `skills.external_dirs`, Discord channel prompts. Read-only inside the container
 - `./hermes-data/SOUL.md`: agent persona. Hermes can rewrite it at runtime and the change lands here
@@ -204,15 +232,23 @@ Tracked, so it travels to another machine in the clone:
 - `./hermes-data/memories/MEMORY.md` and `USER.md`: the memory subsystem's files
 - `./hermes-data/projects/`: project workspaces, one subdir per Discord channel
 - `./hermes-data/scripts/crypto-monitor-daily.sh`: the cron job's entry point. Read-only inside the container
+- `./hermes-data/skills/`: skills hermes installs or writes at runtime, with `.usage.json` and `.bundled_manifest`. Curator backups and lock files inside it stay ignored
+- `./hermes-data/plugins/`, `./hermes-data/hooks/`, `./hermes-data/skins/`: plugins, hooks and skins added at runtime
+
+Tracked by the fork repository itself, so it travels in the `hermes-agent` clone:
+
 - `./.agents/skills/`: curated skill set, mounted read-only at `/opt/data/external-skills`
 - `./skills/`: bundled hermes skills, mounted read-only at `/opt/data/bundled-skills`
 
-Ignored, so it stays on this machine and has to be recreated on the next one:
+Ignored by `hermes-data/.gitignore`, so it stays on this machine and has to be recreated on the next one:
 
 - `./hermes-data/state.db`, `./hermes-data/sessions/`, `./hermes-data/logs/`, `./hermes-data/cache/`: sessions, logs, caches
 - `./hermes-data/auth.json`: OAuth tokens. Re-run the provider login on the other machine
 - `./hermes-data/.env`: runtime secrets hermes and its child processes read
 - `./hermes-data/projects/*/.venv/`: per-project virtualenvs. Rebuild with Step 6b
+
+Ignored by the fork repository's own `.gitignore`:
+
 - `./.env`: Compose-time values, including `HERMES_UID`/`HERMES_GID` on Linux
 
 ### Deploying to a minipc (Proxmox VM with Docker Engine)

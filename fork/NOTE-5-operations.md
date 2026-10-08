@@ -158,7 +158,7 @@ docker compose build --no-cache gateway dashboard
 docker compose up -d
 ```
 
-`./hermes-data/` survives `docker compose down`, and it survives `docker compose down -v` too. `-v` removes named volumes, and this fork uses none: `/opt/data` is a bind mount from the repo, so `-v` never touches it. To get a true zero-state you would have to delete files under `./hermes-data/` yourself on the host, which is destructive and irreversible, and would also delete the tracked config, persona, cron jobs, memories and project workspaces that live in the same directory. If you want a clean runtime without losing those, delete only the untracked parts: `git clean -xdf hermes-data` removes exactly what `.gitignore` excludes and leaves the tracked files alone. Check what it would remove first with `git clean -xdn hermes-data`.
+`./hermes-data/` survives `docker compose down`, and it survives `docker compose down -v` too. `-v` removes named volumes, and this fork uses none: `/opt/data` is a bind mount from the repo, so `-v` never touches it. To get a true zero-state you would have to delete files under `./hermes-data/` yourself on the host, which is destructive and irreversible, and would also delete the tracked config, persona, cron jobs, memories and project workspaces that live in the same directory. If you want a clean runtime without losing those, delete only the untracked parts, from inside `hermes-data/` itself: it is its own git repository now, so a `git clean` run from the fork's repo root skips it as a nested repository instead of entering it. `cd hermes-data && git clean -xdf` removes exactly what `hermes-data/.gitignore` excludes and leaves the tracked files alone. Check what it would remove first with `git clean -xdn`, run from the same directory.
 
 ### Adding a new credential
 
@@ -212,7 +212,7 @@ Then recreate, because the file is read once at startup and is read-only inside 
 docker compose up -d --force-recreate gateway dashboard
 ```
 
-`hermes model` and `hermes tools` inside the container will not work for this, for the reason above. The file is tracked in git, so `git diff hermes-data/config.yaml` always shows exactly what you changed before you commit it.
+`hermes model` and `hermes tools` inside the container will not work for this, for the reason above. The file is tracked in `hermes-data`'s own git repository, so `git diff config.yaml`, run from inside `hermes-data/`, always shows exactly what you changed before you commit it there.
 
 ### Re-running OAuth login
 
@@ -228,7 +228,7 @@ docker compose exec -it gateway hermes auth add anthropic --type oauth
 
 ### Backing up
 
-Config, persona, cron jobs, memories and project workspaces are tracked in git, so committing and pushing is the backup for those, and it is also how they reach another machine. See the last section of `FORK.md`.
+Config, persona, cron jobs, memories and project workspaces are tracked in `hermes-data`'s own git repository (a clone of the private `hermes-projects`), so committing and pushing from inside `hermes-data/` is the backup for those, and it is also how they reach another machine. See the last section of `FORK.md`.
 
 What git does not cover is the untracked half of `./hermes-data/`: `state.db` and `sessions/` (conversation history), `auth.json` (OAuth tokens), `kanban.db`, `.env`, and the logs. One copy of the whole directory catches both halves.
 

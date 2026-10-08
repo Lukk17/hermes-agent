@@ -47,7 +47,11 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 │   └── NOTE-*.md                      # fork docs
 │
 ├── hermes-data/                       # the container's whole home directory, mounted at /opt/data
-│   │                                  # TRACKED (travels between machines):
+│   │                                  # its own git repo (clone of the private Lukk17/hermes-projects,
+│   │                                  # branch master), not a submodule, ignored wholesale by the line
+│   │                                  # below. TRACKED inside hermes-data's OWN .gitignore (travels via
+│   │                                  # the hermes-projects clone):
+│   ├── .gitignore                     #   the selective-tracking rules, same scheme the fork used to run
 │   ├── config.yaml                    #   runtime config, re-mounted read-only in the container
 │   ├── SOUL.md                        #   agent persona, hermes may rewrite it at runtime
 │   ├── cron/jobs.json                 #   scheduled jobs
@@ -59,22 +63,24 @@ If a rule here contradicts an upstream rule, the upstream rule wins (this reposi
 │   │   ├── osint/                     #     one Discord channel worth of project
 │   │   └── research/                  #     one Discord channel worth of project
 │   ├── scripts/crypto-monitor-daily.sh  # cron entry point, re-mounted read-only
-│   │                                  # IGNORED (per-machine, never enters git):
+│   ├── skills/                        #   skills installed at runtime (curator backups stay ignored)
+│   ├── plugins/  hooks/  skins/       #   plugins, hooks and skins added at runtime
+│   │                                  # IGNORED by hermes-data's OWN .gitignore (per-machine, never
+│   │                                  # enters either git repo):
 │   ├── .env                           #   secrets that hermes child processes need
 │   ├── state.db*                      #   SQLite sessions
 │   ├── auth.json                      #   OAuth tokens
 │   ├── logs/  sessions/  cache/       #   logs, session files, model catalog cache
-│   ├── skills/                        #   skills installed at runtime
 │   └── ...                            #   everything else under hermes-data/ is ignored
 │
 └── .agents/skills/                    # curated user-authored skills (mirror of agent-standards)
 ```
 
-The rule that makes this layout readable: `hermes-data/` is the container's home directory, bind-mounted whole at `/opt/data`. There is no Docker volume and no per-file mount of a config directory. `.gitignore` is what decides which files inside that one directory travel between machines: it ignores `hermes-data/*` and then re-includes `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, and `scripts/crypto-monitor-daily.sh`. So the agent writes wherever it likes under its own home, and git picks up only the parts worth carrying to another machine.
+The rule that makes this layout readable: `hermes-data/` is the container's home directory, bind-mounted whole at `/opt/data`. There is no Docker volume and no per-file mount of a config directory. `hermes-data/` is also its own git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. This repo's own `.gitignore` ignores it wholesale with one line, `/hermes-data/`, so this repo never tracks a single byte of it. Inside `hermes-data/`, its own `.gitignore` is what decides which files travel between machines: it ignores everything by default and then re-includes `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, `projects/`, `scripts/crypto-monitor-daily.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and `.gitignore` itself. So the agent writes wherever it likes under its own home, and the `hermes-projects` clone picks up only the parts worth carrying to another machine.
 
 Two files inside that mount are re-mounted read-only on top of it, `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh`. A running hermes cannot rewrite either one. Changing them means editing the host file and recreating the container.
 
-The fork overlay is everything under `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, `.gitignore` additions, `FORK.md`, and the tracked files inside `hermes-data/`. The rest is upstream hermes-agent code that we do not modify.
+The fork overlay is everything under `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, this repo's `.gitignore`, and `FORK.md`. `hermes-data/` is a separate nested git repository (the `hermes-projects` clone) and is not part of this repo's tracked tree at all. The rest is upstream hermes-agent code that we do not modify.
 
 ## Engineering principles for the fork
 
@@ -130,7 +136,7 @@ Hermes uses cron (`hermes-data/cron/jobs.json`), NOT heartbeat. Do not invent he
 | Agent persona / SOUL | `hermes-data/SOUL.md` |
 | Per-project conventions | `hermes-data/projects/<name>/AGENTS.md` (and per-project docs in the same dir) |
 | Cron entry-point script | `hermes-data/scripts/crypto-monitor-daily.sh` (read-only inside the container, so a recreate is required) |
-| Agent memory | `hermes-data/memories/MEMORY.md` and `USER.md`. Hermes writes these itself at runtime, they are tracked, so commit them like any other change |
+| Agent memory | `hermes-data/memories/MEMORY.md` and `USER.md`. Hermes writes these itself at runtime. They are tracked by `hermes-data`'s own git repo (`hermes-projects`), so commit them from inside `hermes-data/`, not in the fork |
 | Skills catalog | `.agents/skills/<skill>/SKILL.md` (mirrored from `Lukk17/agent-standards/.agents/skills/` via `git checkout agent-standards/master -- ".agents/skills/<skill>/"`) |
 | Docker compose / image | `docker-compose.override.yml` plus `Dockerfile.fork` |
 | Fork docs | `fork/NOTE-*.md` (one per topic: install, operations, minipc, updating, discord) |
@@ -140,10 +146,10 @@ Hermes uses cron (`hermes-data/cron/jobs.json`), NOT heartbeat. Do not invent he
 
 - `AGENTS.md` at repo root: upstream hermes-agent guide. Do not modify.
 - Everything at the repository root that is not fork-owned is upstream code, because the repository root IS the hermes-agent checkout. There is no `hermes-agent/` subdirectory to fence off. Concretely, do not patch: every top-level `*.py` (`run_agent.py`, `cli.py`, `model_tools.py`, `toolsets.py`, `hermes_constants.py`, `hermes_state*.py`, `utils.py`, `batch_runner.py`, `mcp_serve.py`, `setup.py`, and the rest), nor `agent/`, `gateway/`, `tools/`, `hermes_cli/`, `cron/`, `tui_gateway/`, `acp_adapter/`, `plugins/`, `providers/`, `skills/`, `optional-skills/`, `optional-mcps/`, `web/`, `ui-tui/`, `apps/`, `website/`, `docs/`, `scripts/`, `tests/`, `tests-js/`, `evals/`, `native/`, `nix/`, `locales/`, `docker/`, `assets/`, `contributors/`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `uv.lock`. Rebasing onto upstream merges their changes; we do not patch them in place unless the fork is the only way.
-- Fork-owned, and therefore editable: `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, the fork's additions to `.gitignore`, `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`, `FORK.md`, and the tracked files inside `hermes-data/`.
-- `hermes-data/` is not a fenced-off directory any more. It is the container's home directory and it holds both tracked config and untracked runtime state side by side. Which is which is decided by `.gitignore`, not by the directory name, so check `git status` before assuming a file there is throwaway.
-- Tracked and editable inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, and `scripts/crypto-monitor-daily.sh`.
-- Ignored, and never to be committed or hand-edited: `hermes-data/state.db*` (SQLite sessions), `hermes-data/auth.json` (OAuth tokens), `hermes-data/.env` (secrets that hermes child processes read), and every log, cache, lock and session file beside them.
+- Fork-owned, and therefore editable: `fork/`, `Dockerfile.fork`, `docker-compose.override.yml`, this repo's `.gitignore`, `.agents/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/`, `FORK.md`.
+- `hermes-data/` is its own nested git repository, a clone of the private `Lukk17/hermes-projects` (branch `master`), not a submodule. It is not part of this repo's tracked tree at all: this repo's `.gitignore` ignores it wholesale with one line, `/hermes-data/`. It still holds both tracked config and untracked runtime state side by side. Which is which is decided by `hermes-data/.gitignore`, not by the directory name, so check `git status` (run inside `hermes-data/`) before assuming a file there is throwaway.
+- Tracked by `hermes-data/.gitignore` and editable inside it: `config.yaml`, `SOUL.md`, `cron/jobs.json`, `memories/*.md`, everything under `projects/`, `scripts/crypto-monitor-daily.sh`, `skills/`, `plugins/`, `hooks/`, `skins/`, and `.gitignore` itself.
+- Ignored by `hermes-data/.gitignore`, and never to be committed or hand-edited: `hermes-data/state.db*` (SQLite sessions), `hermes-data/auth.json` (OAuth tokens), `hermes-data/.env` (secrets that hermes child processes read), and every log, cache, lock and session file beside them.
 - `hermes-data/config.yaml` and `hermes-data/scripts/crypto-monitor-daily.sh` are re-mounted read-only inside the container. Hermes cannot rewrite them at runtime, and `HERMES_SKIP_CONFIG_MIGRATION=1` stops the boot hook trying. Edit them on the host and recreate the container.
 
 ### Editing protocol
@@ -176,7 +182,7 @@ Conflicts will appear in files the fork actually modifies. Expected conflict fil
 Files that should NOT conflict because the fork's modifications live elsewhere:
 
 - Anything under `fork/` (we own this namespace)
-- `hermes-data/` (upstream does not ship this directory, so its tracked files replay cleanly and its ignored files are invisible to git)
+- `hermes-data/` (its own nested git repository now, entirely ignored by this repo's `.gitignore`, so a rebase here never touches it at all)
 - `.agents/skills/`, `.claude/`, `.codex/`, `.kilo/`, `.opencode/` (fork AI tooling, not upstream)
 
 See `fork/NOTE-7-updating-from-upstream.md` for the full procedure including image tag rename, build, push, and minipc pull.

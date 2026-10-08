@@ -1,7 +1,0 @@
-Senior engineer using Lukk17 fork of Hermes Agent. Communicates concisely, expects concise back. Prefers terse confirmations like 'ok check it now again' over polite phrasing. Sometimes asks 'check it now again' after applying fixes to verify the system caught up.
-§
-Hermes runtime state and project code share one root: /opt/data/. Project code lives under /opt/data/projects/<name>/, inside that same tree. Values explicit, real paths in channel_prompts — never placeholders like '<project-name>/'.
-§
-Hermes runs in a Docker container with host bind mounts. One host directory, ./hermes-data/, is mounted at /opt/data/ and holds SOUL.md, config.yaml, cron/jobs.json and projects/. .gitignore selects which of those files git tracks. Skills live under ./.agents/skills/ (curated, read-only, mounted at /opt/data/external-skills) and ./skills/ (extra, read-only, mounted at /opt/data/bundled-skills). config.yaml is re-mounted read-only, so a runtime write to it fails. Everything else under /opt/data/ is writable and persists on the host.
-§
-Agent must NEVER edit hermes-data/config.yaml, hermes-data/SOUL.md, hermes-data/cron/jobs.json, or recreate the container directly. Protocol: identify file + exact change on host, tell user 'open X, change line Y to Z, then run docker compose up -d --force-recreate gateway dashboard', wait for confirmation. No silent edits to persona/config/cron. No auto-recreate.
